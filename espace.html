@@ -1582,7 +1582,7 @@
       if(d.status === 'accepted'){
         clearTimeout(ringTimeout);
         stopRingtone();
-        joinJitsiRoom(roomName, type, targetName, targetPhoto);
+        joinJitsiRoom(roomName, type, targetName, targetPhoto); currentCallUnsub(); currentCallUnsub = null;
       } else if(d.status === 'rejected' || d.status === 'ended'){
         endCall(true, false);
       }
@@ -1594,7 +1594,7 @@
     }, RING_DURATION);
   }
 
-  function joinJitsiRoom(roomName, type, displayName, photo){
+  function joinJitsiRoom(roomName, type, displayName, photo){      if(jitsiApi){ try{ jitsiApi.dispose(); }catch(e){} jitsiApi = null; }
     const videosBox = document.getElementById('call-videos');
     if(!videosBox) return;
     videosBox.classList.remove('hidden');
@@ -1698,7 +1698,7 @@
         </div>
       </div>`;
 
-    const missedTimeout = setTimeout(() => {
+    let handled = false; const missedTimeout = setTimeout(() => {
       stopRingtone();
       updateDoc(doc(db, "calls", callId), { status: "ended" }).catch(()=>{});
       currentCallDocId = null;
@@ -1717,7 +1717,7 @@
       }
     });
 
-    document.getElementById('btn-reject').addEventListener('click', () => {
+    document.getElementById('btn-reject').addEventListener('click', () => { if(handled) return; handled = true;
       clearTimeout(missedTimeout);
       stopRingtone();
       updateDoc(doc(db, "calls", callId), { status: "rejected" }).catch(()=>{});
@@ -1725,7 +1725,7 @@
       callRoot.innerHTML = '';
       ringingUnsub();
     });
-    document.getElementById('btn-accept').addEventListener('click', async () => {
+    document.getElementById('btn-accept').addEventListener('click', async () => { if(handled) return; handled = true;
       clearTimeout(missedTimeout);
       stopRingtone();
       ringingUnsub();
@@ -1737,7 +1737,7 @@
     startRingtone();
   }
 
-  function listenIncomingCalls(){
+  function listenIncomingCalls(){ if(incomingCallsUnsub) return;
     const q = query(collection(db, "calls"), where("calleeId", "==", currentUser.uid), where("status", "==", "ringing"));
     incomingCallsUnsub = onSnapshot(q, (snap) => {
       snap.docChanges().forEach(change => {
