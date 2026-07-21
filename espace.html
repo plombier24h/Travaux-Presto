@@ -8,7 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://meet.jit.si/external_api.js"></script>
+
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <style>
   :root{
@@ -1262,7 +1262,7 @@
 
   // ---------- SYSTÈME D'APPEL (Jitsi Meet pour la vidéo/audio + Firestore pour la sonnerie) ----------
   const RING_DURATION = 38000; // ~10 sonneries
-  let jitsiApi = null;
+  let peerConnection = null; } if(localStream){ localStream.getTracks().forEach(t => t.stop()); localStream = null; } if(remoteStream){ remoteStream.getTracks().forEach(t => t.stop()); remoteStream = null; } webrtcUnsubs.forEach(u => { try{ u(); }catch(e){} }); webrtcUnsubs = []; const ICE_SERVERS = { iceServers: [ { urls: 'stun:stun.l.google.com:19302' }, { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' }, { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' }, { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' } ] }; let peerConnection = null; let localStream = null; let remoteStream = null; let webrtcUnsubs = [];
   let currentCallDocId = null;
   let currentCallUnsub = null;
   let incomingCallsUnsub = null;
@@ -1391,18 +1391,18 @@
     if(muteBtn){
       muteBtn.classList.remove('hidden');
       muteBtn.addEventListener('click', () => {
-        if(!jitsiApi) return;
+        if(!localStream) return;
         localAudioMuted = !localAudioMuted;
-        jitsiApi.executeCommand('toggleAudio');
+        localStream.getAudioTracks().forEach(t => t.enabled = !localAudioMuted);
         muteBtn.classList.toggle('active', localAudioMuted);
       });
     }
     if(camBtn){
       if(type === 'video') camBtn.classList.remove('hidden');
       camBtn.addEventListener('click', () => {
-        if(!jitsiApi) return;
+        if(!localStream) return;
         localVideoMuted = !localVideoMuted;
-        jitsiApi.executeCommand('toggleVideo');
+        localStream.getVideoTracks().forEach(t => t.enabled = !localVideoMuted);
         camBtn.classList.toggle('active', localVideoMuted);
       });
     }
@@ -1582,7 +1582,7 @@
       if(d.status === 'accepted'){
         clearTimeout(ringTimeout);
         stopRingtone();
-        joinJitsiRoom(roomName, type, targetName, targetPhoto); currentCallUnsub(); currentCallUnsub = null;
+        connectCall(type, true); currentCallUnsub(); currentCallUnsub = null;
       } else if(d.status === 'rejected' || d.status === 'ended'){
         endCall(true, false);
       }
@@ -1594,11 +1594,11 @@
     }, RING_DURATION);
   }
 
-  function joinJitsiRoom(roomName, type, displayName, photo){      if(jitsiApi){ try{ jitsiApi.dispose(); }catch(e){} jitsiApi = null; }
+  async function connectCall(type, isCaller){ const callId = currentCallDocId;      if(peerConnection){ try{ jitsiApi.dispose(); }catch(e){} peerConnection = null; } if(localStream){ localStream.getTracks().forEach(t => t.stop()); localStream = null; } if(remoteStream){ remoteStream.getTracks().forEach(t => t.stop()); remoteStream = null; } webrtcUnsubs.forEach(u => { try{ u(); }catch(e){} }); webrtcUnsubs = []; }
     const videosBox = document.getElementById('call-videos');
     if(!videosBox) return;
     videosBox.classList.remove('hidden');
-    document.getElementById('call-status').textContent = "Connexion...";
+    document.getElementById('call-status').textContent = "Connexion..."; videosBox.innerHTML = '<video id="local-video" autoplay playsinline muted></video><video id="remote-video" autoplay playsinline></video>'; try{ localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: type === 'video' }); }catch(e){ showMsg("Impossible d'acceder a la camera/micro.", "error"); endCall(); return; } document.getElementById('local-video').srcObject = localStream; remoteStream = new MediaStream(); document.getElementById('remote-video').srcObject = remoteStream; peerConnection = new RTCPeerConnection(ICE_SERVERS); localStream.getTracks().forEach(t => peerConnection.addTrack(t, localStream)); peerConnection.ontrack = (ev) => { ev.streams[0].getTracks().forEach(t => remoteStream.addTrack(t)); }; peerConnection.onconnectionstatechange = () => { if(peerConnection.connectionState === 'connected'){ document.getElementById('call-status').textContent = "En communication"; setupCallControls(type); } if(peerConnection.connectionState === 'failed' || peerConnection.connectionState === 'disconnected'){ endCall(); } }; const callDocRef = doc(db, "calls", callId); const callerCandidates = collection(callDocRef, "callerCandidates"); const calleeCandidates = collection(callDocRef, "calleeCandidates"); if(isCaller){ peerConnection.onicecandidate = (ev) => { if(ev.candidate) addDoc(callerCandidates, ev.candidate.toJSON()); }; const offerDescription = await peerConnection.createOffer(); await peerConnection.setLocalDescription(offerDescription); await updateDoc(callDocRef, { offer: { sdp: offerDescription.sdp, type: offerDescription.type } }); const unsubA = onSnapshot(callDocRef, async (snap) => { const d = snap.data(); if(peerConnection && !peerConnection.currentRemoteDescription && d && d.answer){ await peerConnection.setRemoteDescription(new RTCSessionDescription(d.answer)); } }); const unsubB = onSnapshot(calleeCandidates, (snap) => { snap.docChanges().forEach(c => { if(c.type === 'added' && peerConnection) peerConnection.addIceCandidate(new RTCIceCandidate(c.doc.data())); }); }); webrtcUnsubs.push(unsubA, unsubB); } else { peerConnection.onicecandidate = (ev) => { if(ev.candidate) addDoc(calleeCandidates, ev.candidate.toJSON()); }; const callSnap = await getDoc(callDocRef); const callData = callSnap.data(); await peerConnection.setRemoteDescription(new RTCSessionDescription(callData.offer)); const answerDescription = await peerConnection.createAnswer(); await peerConnection.setLocalDescription(answerDescription); await updateDoc(callDocRef, { answer: { sdp: answerDescription.sdp, type: answerDescription.type } }); const unsubC = onSnapshot(callerCandidates, (snap) => { snap.docChanges().forEach(c => { if(c.type === 'added' && peerConnection) peerConnection.addIceCandidate(new RTCIceCandidate(c.doc.data())); }); }); webrtcUnsubs.push(unsubC); } return;
 
     jitsiApi = new JitsiMeetExternalAPI('meet.jit.si', {
       roomName: roomName,
@@ -1654,10 +1654,9 @@
     if(updateStatus === undefined) updateStatus = true;
     clearTimeout(ringTimeout);
     stopRingtone();
-    if(jitsiApi){
-      try { jitsiApi.dispose(); } catch(e){}
-      jitsiApi = null;
-    }
+    if(peerConnection){
+      try{ peerConnection.close(); }catch(e){}
+      peerConnection = null; } if(localStream){ localStream.getTracks().forEach(t => t.stop()); localStream = null; } if(remoteStream){ remoteStream.getTracks().forEach(t => t.stop()); remoteStream = null; } webrtcUnsubs.forEach(u => { try{ u(); }catch(e){} }); webrtcUnsubs = [];
     if(currentCallUnsub){ currentCallUnsub(); currentCallUnsub = null; }
     if(currentCallDocId && updateStatus){
       updateDoc(doc(db, "calls", currentCallDocId), { status: "ended" }).catch(()=>{});
@@ -1732,7 +1731,7 @@
       await updateDoc(doc(db, "calls", callId), { status: "accepted" });
       callRoot.innerHTML = callScreenHtml(data.callerName || 'Appel', data.callerPhoto, "Connexion...", true);
       document.getElementById('btn-hangup').addEventListener('click', () => endCall());
-      joinJitsiRoom(data.roomName, data.type, data.callerName, data.callerPhoto);
+      connectCall(data.type, false);
     });
     startRingtone();
   }
