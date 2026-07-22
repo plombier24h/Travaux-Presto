@@ -139,13 +139,13 @@
     box-shadow:0 0 0 1px rgba(255,107,107,0.2), 0 0 18px rgba(255,90,90,0.4);
   }
   .call-btn.hangup{
-    width:66px; height:66px; color:#fff; border-color:rgba(255,107,107,0.7);
-    background:linear-gradient(155deg, rgba(255,107,107,0.28), rgba(160,35,35,0.4));
+    width:66px; height:66px; color:#fff; border-color:#E14848;
+    background:#E14848;
     box-shadow:0 0 0 1px rgba(255,107,107,0.3), 0 0 28px rgba(255,70,70,0.5);
   }
   .call-btn.accept{
-    width:66px; height:66px; color:#fff; border-color:rgba(79,216,146,0.7);
-    background:linear-gradient(155deg, rgba(79,216,146,0.28), rgba(30,130,75,0.4));
+    width:66px; height:66px; color:#fff; border-color:#3FBE72;
+    background:#3FBE72;
     box-shadow:0 0 0 1px rgba(79,216,146,0.3), 0 0 28px rgba(70,220,140,0.5);
   }
 
@@ -1315,6 +1315,11 @@
     if(ringAudioCtx){ ringAudioCtx.close().catch(()=>{}); ringAudioCtx = null; }
   }
 
+  // Signal de raccroché "au mieux" si l'onglet/l'appli est fermée pendant un appel (ferme l'onglet, quitte l'appli)
+  window.addEventListener('pagehide', () => {
+    if(currentCallDocId){ updateDoc(doc(db, "calls", currentCallDocId), { status: "ended" }).catch(()=>{}); }
+  });
+
   // ---------- NOTIFICATION MAIL AUX ARTISANS (EmailJS) ----------
   const EMAILJS_PUBLIC_KEY = "yWkoRm-wT-iPdrq4i";
   const EMAILJS_SERVICE_ID = "service_caezxtc";
@@ -1613,7 +1618,7 @@
     const callRoot = document.getElementById('call-root');
     const roomName = 'TravauxPresto-' + currentUser.uid.slice(0,6) + '-' + targetUid.slice(0,6) + '-' + Date.now().toString(36);
 
-    callRoot.innerHTML = callScreenHtml(targetName, targetPhoto, "Appel en cours" + (type==='video'?' (vidéo)':'') + "...");
+    callRoot.innerHTML = callScreenHtml(targetName, targetPhoto, type === 'video' ? "Appel vidéo en cours..." : "Appel en cours...");
     document.getElementById('btn-hangup').addEventListener('click', () => endCall());
     startRingtone();
 
@@ -1645,6 +1650,7 @@
   }
 
   async function connectCall(type, isCaller){
+    stopRingtone();
     const callId = currentCallDocId;
     const videosBox = document.getElementById('call-videos');
     if(!videosBox) return;
@@ -1681,7 +1687,7 @@
     peerConnection.onconnectionstatechange = () => {
       console.log("connectionState:", peerConnection.connectionState);
       if(peerConnection.connectionState === 'connected'){ clearTimeout(connectTimeout); }
-      if(peerConnection.connectionState === 'failed' || peerConnection.connectionState === 'disconnected'){ console.error("peerConnection failed/disconnected"); clearTimeout(connectTimeout); endCall(); }
+      if(peerConnection.connectionState === 'failed' || peerConnection.connectionState === 'disconnected' || peerConnection.connectionState === 'closed'){ console.error("peerConnection failed/disconnected/closed"); clearTimeout(connectTimeout); endCall(); }
     };
     peerConnection.oniceconnectionstatechange = () => {
       console.log("iceConnectionState:", peerConnection.iceConnectionState);
@@ -1774,7 +1780,10 @@
       peerConnection = null; } if(localStream){ localStream.getTracks().forEach(t => t.stop()); localStream = null; } if(remoteStream){ remoteStream.getTracks().forEach(t => t.stop()); remoteStream = null; } webrtcUnsubs.forEach(u => { try{ u(); }catch(e){} }); webrtcUnsubs = [];
     if(currentCallUnsub){ currentCallUnsub(); currentCallUnsub = null; }
     if(currentCallDocId && updateStatus){
-      updateDoc(doc(db, "calls", currentCallDocId), { status: "ended" }).catch(()=>{});
+      const endedDocId = currentCallDocId;
+      updateDoc(doc(db, "calls", endedDocId), { status: "ended" }).catch(() => {
+        setTimeout(() => { updateDoc(doc(db, "calls", endedDocId), { status: "ended" }).catch(()=>{}); }, 800);
+      });
     }
     currentCallDocId = null;
     localAudioMuted = false; localVideoMuted = false;
