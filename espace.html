@@ -1594,7 +1594,7 @@
     }, RING_DURATION);
   }
 
-  async function connectCall(type, isCaller){ const callId = currentCallDocId;      if(peerConnection){ try{ jitsiApi.dispose(); }catch(e){} peerConnection = null; } if(localStream){ localStream.getTracks().forEach(t => t.stop()); localStream = null; } if(remoteStream){ remoteStream.getTracks().forEach(t => t.stop()); remoteStream = null; } webrtcUnsubs.forEach(u => { try{ u(); }catch(e){} }); webrtcUnsubs = []; }
+  async function connectCall(type, isCaller){ const callId = currentCallDocId;      
     const videosBox = document.getElementById('call-videos');
     if(!videosBox) return;
     videosBox.classList.remove('hidden');
