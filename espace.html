@@ -1649,6 +1649,7 @@
     try{
       localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: type === 'video' });
     }catch(e){
+      console.error("connectCall getUserMedia error:", e);
       showMsg("Impossible d'accéder à la caméra/micro.", "error");
       endCall();
       return;
@@ -1673,13 +1674,15 @@
       document.getElementById('call-status').textContent = "En communication";
     };
     const connectTimeout = setTimeout(() => {
-      if(peerConnection){ showMsg("Connexion impossible : réseau incompatible. Réessayez sur un réseau wifi.", "error"); endCall(); }
+      if(peerConnection){ console.error("connectCall timeout: connectionState=", peerConnection.connectionState, "iceConnectionState=", peerConnection.iceConnectionState); showMsg("Connexion impossible : réseau incompatible. Réessayez sur un réseau wifi.", "error"); endCall(); }
     }, 35000);
     peerConnection.onconnectionstatechange = () => {
+      console.log("connectionState:", peerConnection.connectionState);
       if(peerConnection.connectionState === 'connected'){ clearTimeout(connectTimeout); }
-      if(peerConnection.connectionState === 'failed' || peerConnection.connectionState === 'disconnected'){ clearTimeout(connectTimeout); endCall(); }
+      if(peerConnection.connectionState === 'failed' || peerConnection.connectionState === 'disconnected'){ console.error("peerConnection failed/disconnected"); clearTimeout(connectTimeout); endCall(); }
     };
     peerConnection.oniceconnectionstatechange = () => {
+      console.log("iceConnectionState:", peerConnection.iceConnectionState);
       if(peerConnection && (peerConnection.iceConnectionState === 'connected' || peerConnection.iceConnectionState === 'completed')){ clearTimeout(connectTimeout); }
     };
     const callDocRef = doc(db, "calls", callId);
@@ -1709,12 +1712,23 @@
       webrtcUnsubs.push(unsubA, unsubB);
     } else {
       peerConnection.onicecandidate = (ev) => { if(ev.candidate) addDoc(calleeCandidates, ev.candidate.toJSON()); };
-      const offerData = await new Promise((resolve) => {
-        const unsubOffer = onSnapshot(callDocRef, (snap) => {
-          const d = snap.data();
-          if(d && d.offer){ unsubOffer(); resolve(d.offer); }
-        });
-      });
+      let unsubOffer = null;
+      const offerData = await Promise.race([
+        new Promise((resolve) => {
+          unsubOffer = onSnapshot(callDocRef, (snap) => {
+            const d = snap.data();
+            if(d && d.offer){ resolve(d.offer); }
+          });
+        }),
+        new Promise((resolve) => setTimeout(() => resolve(null), 20000))
+      ]);
+      if(unsubOffer) unsubOffer();
+      if(!offerData){
+        clearTimeout(connectTimeout);
+        showMsg("Connexion impossible : l'appelant n'a pas pu etablir l'appel.", "error");
+        endCall();
+        return;
+      }
       if(!peerConnection) return;
       await peerConnection.setRemoteDescription(new RTCSessionDescription(offerData));
       const answerDescription = await peerConnection.createAnswer();
@@ -1845,6 +1859,6 @@
   }
 </script>
 
-<div style="text-align:center; font-size:10px; color:#B9C2CC; padding:14px 0 4px;">Version build : 2026-07-22-04 (fix bascule camera)</div>
+<div style="text-align:center; font-size:10px; color:#B9C2CC; padding:14px 0 4px;">Version build : 2026-07-22-05 (timeout offre + logs diagnostic)</div>
 </body>
 </html>
