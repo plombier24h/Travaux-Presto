@@ -1266,7 +1266,19 @@
 
   // ---------- SYSTÈME D'APPEL (Jitsi Meet pour la vidéo/audio + Firestore pour la sonnerie) ----------
   const RING_DURATION = 38000; // ~10 sonneries
-  async function getIceServers(){ try{ const res = await fetch('https://travauxpresto.metered.live/api/v1/turn/credentials?apiKey=DFJwEF-8u4j9-8fsveu8B874T5hNfWJwyPO-E-siMJVwUQb9'); const servers = await res.json(); return { iceServers: [...servers, { urls: 'stun:stun.l.google.com:19302' }] }; }catch(e){ return { iceServers: [ { urls: 'stun:stun.l.google.com:19302' } ] }; } } let peerConnection = null; let localStream = null; let remoteStream = null; let webrtcUnsubs = [];
+  async function getIceServers(){
+    return {
+      iceServers: [
+        { urls: "stun:stun.relay.metered.ca:80" },
+        { urls: "turn:global.relay.metered.ca:80", username: "5731e87761c6f72cc9b3a954", credential: "7+rmn+YfXjZ1imGP" },
+        { urls: "turn:global.relay.metered.ca:80?transport=tcp", username: "5731e87761c6f72cc9b3a954", credential: "7+rmn+YfXjZ1imGP" },
+        { urls: "turn:global.relay.metered.ca:443", username: "5731e87761c6f72cc9b3a954", credential: "7+rmn+YfXjZ1imGP" },
+        { urls: "turns:global.relay.metered.ca:443?transport=tcp", username: "5731e87761c6f72cc9b3a954", credential: "7+rmn+YfXjZ1imGP" },
+        { urls: 'stun:stun.l.google.com:19302' }
+      ]
+    };
+  }
+  let peerConnection = null; let localStream = null; let remoteStream = null; let webrtcUnsubs = [];
   let currentCallDocId = null;
   let currentCallUnsub = null;
   let incomingCallsUnsub = null;
@@ -1811,6 +1823,6 @@
   }
 </script>
 
-<div style="text-align:center; font-size:10px; color:#B9C2CC; padding:14px 0 4px;">Version build : 2026-07-22-01 (WebRTC)</div>
+<div style="text-align:center; font-size:10px; color:#B9C2CC; padding:14px 0 4px;">Version build : 2026-07-22-02 (WebRTC+TURN statique)</div>
 </body>
 </html>
