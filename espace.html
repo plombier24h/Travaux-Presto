@@ -1442,19 +1442,19 @@
           <button class="modal-close" id="compose-close">Fermer</button>
           <h2 style="font-size:18px; margin-top:6px;">Message à ${targetName}</h2>
           <div class="compose-box">
-            <textarea id="compose-text" placeholder="Votre message..." style="min-height:90px;"></textarea>
+            <textarea id="compose-text" placeholder="Votre message..." style="min-height:90px;"></textarea><input type="file" id="compose-photo-input" accept="image/*" style="margin-top:8px;"><img id="compose-photo-preview" class="hidden" style="max-width:160px; border-radius:10px; display:block; margin-top:8px;">
             <button class="primary" id="compose-send">Envoyer</button>
           </div>
         </div>
       </div>`;
     document.getElementById('compose-close').addEventListener('click', () => root.innerHTML = '');
     document.getElementById('compose-bg').addEventListener('click', (e) => { if(e.target.id==='compose-bg') root.innerHTML=''; });
-    document.getElementById('compose-send').addEventListener('click', async () => {
+    let composePhotoDataUrl = null; document.getElementById('compose-photo-input').addEventListener('change', async () => { const file = document.getElementById('compose-photo-input').files[0]; if(!file) return; try{ composePhotoDataUrl = await resizeImageToDataUrl(file, 900, 0.75); const prev = document.getElementById('compose-photo-preview'); prev.src = composePhotoDataUrl; prev.classList.remove('hidden'); }catch(e){ showMsg('Impossible de charger cette photo.', 'error'); } }); document.getElementById('compose-send').addEventListener('click', async () => {
       const text = document.getElementById('compose-text').value.trim();
       if(!text) return;
       await addDoc(collection(db, "messages"), {
         fromId: currentUser.uid, toId: targetUid,
-        fromName: currentData.prenom + ' ' + currentData.nom,
+        fromName: currentData.prenom + ' ' + currentData.nom, photo: composePhotoDataUrl || null,
         text, read: false, createdAt: serverTimestamp()
       });
       showMsg("Message envoyé.", "ok");
@@ -1487,12 +1487,12 @@
       const el = document.createElement('div');
       el.className = 'item';
       el.innerHTML = `<div class="item-title" style="font-size:14px;">${m.fromName || 'Utilisateur'}${!m.read ? ' <span class="rating-sub" style="color:var(--rouge);">Nouveau</span>' : ''}</div>
-        <div class="item-desc">${m.text}</div>
+        <div class="item-desc">${m.text}</div>${m.photo ? '<img src="' + m.photo + '" style="max-width:200px; border-radius:10px; margin-top:8px; display:block;">' : ''}
         <div class="item-actions">
-          <button data-action="reply">Répondre</button>
+          <button data-action="reply">Répondre</button><button data-action="delete">Supprimer</button>
           <button data-action="contact">Contacter</button>
         </div>`;
-      if(m.fromId && m.fromId !== 'admin'){
+      el.querySelector('[data-action="delete"]').addEventListener('click', async () => { if(!confirm('Supprimer ce message ?')) return; await deleteDoc(doc(db, "messages", s.id)); el.remove(); }); if(m.fromId && m.fromId !== 'admin'){
         el.querySelector('[data-action="reply"]').addEventListener('click', () => {
           root.innerHTML = '';
           openComposeMessage(m.fromId, m.fromName || 'cet utilisateur');
