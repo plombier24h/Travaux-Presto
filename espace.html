@@ -271,7 +271,7 @@
     </select>
     <input type="text" id="ad-metier-autre" placeholder="Précisez le métier recherché" class="hidden" style="margin-top:8px;">
     <label>Description de la demande</label>
-    <textarea id="ad-description" placeholder="Décrivez votre besoin..."></textarea>
+    <textarea id="ad-description" placeholder="Décrivez votre besoin..."></textarea><label>Photo (optionnel)</label><input type="file" id="ad-photo-input" accept="image/*" style="margin-bottom:10px;"><img id="ad-photo-preview" class="hidden" style="max-width:160px; border-radius:10px; display:block; margin-bottom:10px;">
     <button class="primary" id="btn-post-ad">Publier l'annonce</button>
   </div>
 
@@ -368,7 +368,7 @@
   const METIERS = ["Plombier","Électricien","Maçon","Peintre","Menuisier","Chauffagiste"];
   let currentUser = null;
   let currentData = null;
-  let previewMode = false;
+  let previewMode = false; let adPhotoDataUrl = null;
 
   const msg = document.getElementById('msg');
   function showMsg(text, type){ msg.textContent = text; msg.className = type; setTimeout(()=>{msg.className='';}, 4000); }
@@ -823,7 +823,7 @@
   });
 
   // ---------- DÉPOSER UNE ANNONCE ----------
-  document.getElementById('btn-post-ad').addEventListener('click', async () => {
+  function resizeImageToDataUrl(file, maxDim, quality){ return new Promise((resolve, reject) => { const reader = new FileReader(); reader.onerror = reject; reader.onload = () => { const img = new Image(); img.onerror = reject; img.onload = () => { let w = img.naturalWidth, h = img.naturalHeight; if(w > maxDim || h > maxDim){ if(w >= h){ h = Math.round(h * maxDim / w); w = maxDim; } else { w = Math.round(w * maxDim / h); h = maxDim; } } const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h; canvas.getContext('2d').drawImage(img, 0, 0, w, h); resolve(canvas.toDataURL('image/jpeg', quality)); }; img.src = reader.result; }; reader.readAsDataURL(file); }); } document.getElementById('ad-photo-input').addEventListener('change', async () => { const file = document.getElementById('ad-photo-input').files[0]; if(!file) return; try{ adPhotoDataUrl = await resizeImageToDataUrl(file, 900, 0.75); const prev = document.getElementById('ad-photo-preview'); prev.src = adPhotoDataUrl; prev.classList.remove('hidden'); }catch(e){ showMsg('Impossible de charger cette photo.', 'error'); } }); document.getElementById('btn-post-ad').addEventListener('click', async () => {
     let metier = document.getElementById('ad-metier').value;
     if(metier === 'Autre'){
       const autre = document.getElementById('ad-metier-autre').value.trim();
@@ -845,7 +845,7 @@
       const existingDoc = existingSnaps.docs[0];
       await updateDoc(doc(db, "ads", existingDoc.id), {
         description, ville: currentData.ville, telephone: currentData.telephone || '',
-        telephoneVisible: currentData.telephoneVisible !== false, photo: currentData.photo || null,
+        telephoneVisible: currentData.telephoneVisible !== false, photo: currentData.photo || null, photoAnnonce: adPhotoDataUrl || existingDoc.data().photoAnnonce || null,
         adresse: currentData.adresse || '', adresseVisible: currentData.adresseVisible !== false,
         emailVisible: currentData.emailVisible !== false
       });
@@ -860,7 +860,7 @@
         emailVisible: currentData.emailVisible !== false,
         adresse: currentData.adresse || '', adresseVisible: currentData.adresseVisible !== false,
         photo: currentData.photo || null,
-        ville: currentData.ville, metier, description,
+        photoAnnonce: adPhotoDataUrl || null, ville: currentData.ville, metier, description,
         status: "ouverte", createdAt: serverTimestamp()
       });
       showMsg("Annonce publiée.", "ok");
@@ -869,7 +869,7 @@
     document.getElementById('ad-description').value = '';
     document.getElementById('ad-metier-autre').value = '';
     document.getElementById('ad-metier-autre').classList.add('hidden');
-    document.getElementById('ad-metier').value = 'Plombier';
+    document.getElementById('ad-metier').value = 'Plombier'; document.getElementById('ad-photo-input').value = ''; document.getElementById('ad-photo-preview').classList.add('hidden'); adPhotoDataUrl = null;
     loadMyAds();
   });
 
@@ -890,7 +890,7 @@
           <div><div class="item-title">${d.metier}</div><div class="item-sub">${d.ville}</div></div>
           <span class="status-tag status-${d.status}">${d.status === 'ouverte' ? 'Ouverte' : 'Fermée'}</span>
         </div>
-        <div class="item-desc" data-role="desc">${d.description}</div>
+        <div class="item-desc" data-role="desc">${d.description}</div>${d.photoAnnonce ? '<img src="' + d.photoAnnonce + '" style="width:100%; max-height:200px; object-fit:cover; border-radius:10px; margin-top:8px; display:block;">' : ''}
         <div class="item-actions">
           <button data-action="edit">Modifier</button>
           <button data-action="delete">Supprimer</button>
@@ -1246,7 +1246,7 @@
           ${avatarHtml(d.photo, d.prenom+' '+d.nom, 40)}
           <div><div class="item-title">${d.metier}</div><div class="item-sub">${d.ville} — ${d.prenom} ${d.nom}</div></div>
         </div>
-        <div class="item-desc">${d.description}</div>
+        <div class="item-desc">${d.description}</div>${d.photoAnnonce ? '<img src="' + d.photoAnnonce + '" style="width:100%; max-height:220px; object-fit:cover; border-radius:10px; margin-top:10px; display:block;">' : ''}
         <div class="item-sub" style="margin-top:8px;">${d.telephoneVisible === false ? 'Numéro masqué' : (d.telephone ? `<a href="tel:${d.telephone.replace(/\s/g,'')}" style="color:var(--marine); font-weight:600; text-decoration:none;">${d.telephone}</a>` : '')}</div>
         ${d.emailVisible !== false && d.email ? `<div class="item-sub" style="margin-top:4px;">${d.email}</div>` : ''}
         ${d.adresseVisible !== false && d.adresse ? `<div class="item-sub" style="margin-top:4px;">${d.adresse}</div>` : ''}
