@@ -1675,6 +1675,13 @@
     const callDocRef = doc(db, "calls", callId);
     const callerCandidates = collection(callDocRef, "callerCandidates");
     const calleeCandidates = collection(callDocRef, "calleeCandidates");
+    const hangupUnsub = onSnapshot(callDocRef, (snap) => {
+      const d = snap.data();
+      if(d && (d.status === 'ended' || d.status === 'rejected')){
+        endCall(true, false);
+      }
+    });
+    webrtcUnsubs.push(hangupUnsub);
     if(isCaller){
       peerConnection.onicecandidate = (ev) => { if(ev.candidate) addDoc(callerCandidates, ev.candidate.toJSON()); };
       const offerDescription = await peerConnection.createOffer();
@@ -1692,9 +1699,14 @@
       webrtcUnsubs.push(unsubA, unsubB);
     } else {
       peerConnection.onicecandidate = (ev) => { if(ev.candidate) addDoc(calleeCandidates, ev.candidate.toJSON()); };
-      const callSnap = await getDoc(callDocRef);
-      const callData = callSnap.data();
-      await peerConnection.setRemoteDescription(new RTCSessionDescription(callData.offer));
+      const offerData = await new Promise((resolve) => {
+        const unsubOffer = onSnapshot(callDocRef, (snap) => {
+          const d = snap.data();
+          if(d && d.offer){ unsubOffer(); resolve(d.offer); }
+        });
+      });
+      if(!peerConnection) return;
+      await peerConnection.setRemoteDescription(new RTCSessionDescription(offerData));
       const answerDescription = await peerConnection.createAnswer();
       await peerConnection.setLocalDescription(answerDescription);
       await updateDoc(callDocRef, { answer: { sdp: answerDescription.sdp, type: answerDescription.type } });
@@ -1823,6 +1835,6 @@
   }
 </script>
 
-<div style="text-align:center; font-size:10px; color:#B9C2CC; padding:14px 0 4px;">Version build : 2026-07-22-02 (WebRTC+TURN statique)</div>
+<div style="text-align:center; font-size:10px; color:#B9C2CC; padding:14px 0 4px;">Version build : 2026-07-22-03 (fix synchro offre+raccroche)</div>
 </body>
 </html>
