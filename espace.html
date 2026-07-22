@@ -1422,20 +1422,21 @@
       switchBtn.classList.remove('hidden');
       let switching = false;
       switchBtn.addEventListener('click', async () => {
+        console.log('camera-switch clicked, switching=', switching, 'localStream=', !!localStream);
         if(!localStream || switching) return;
         switching = true;
         const nextFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
+        const oldVideoTrack = localStream.getVideoTracks()[0];
+        const audioTrack = localStream.getAudioTracks()[0];
         try{
-          const newCamStream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: nextFacingMode } } });
+          if(oldVideoTrack) oldVideoTrack.stop();
+          const newCamStream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: nextFacingMode } });
           const newVideoTrack = newCamStream.getVideoTracks()[0];
           if(!newVideoTrack) throw new Error('Aucune piste vidéo disponible');
           if(peerConnection){
             const sender = peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
             if(sender) await sender.replaceTrack(newVideoTrack);
           }
-          const oldVideoTrack = localStream.getVideoTracks()[0];
-          if(oldVideoTrack) oldVideoTrack.stop();
-          const audioTrack = localStream.getAudioTracks()[0];
           const newLocalStream = new MediaStream();
           if(audioTrack) newLocalStream.addTrack(audioTrack);
           newLocalStream.addTrack(newVideoTrack);
@@ -1443,6 +1444,7 @@
           currentFacingMode = nextFacingMode;
           if(localVideo) localVideo.srcObject = localStream;
         }catch(e){
+          console.error('camera switch error:', e);
           showMsg("Changement de caméra impossible : " + (e.name || e.message || "erreur inconnue"), "error");
         }
         switching = false;
@@ -1859,6 +1861,5 @@
   }
 </script>
 
-<div style="text-align:center; font-size:10px; color:#B9C2CC; padding:14px 0 4px;">Version build : 2026-07-22-05 (timeout offre + logs diagnostic)</div>
 </body>
 </html>
