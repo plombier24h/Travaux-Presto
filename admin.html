@@ -679,8 +679,11 @@
         </div>` : ''}
         ${c.status === 'approuve' ? `
         <div class="row-actions" style="margin-top:12px;">
-          <button class="btn-sm danger" data-action="revoke">Retirer la certification</button>
-        </div>` : ''}`;
+          <button class="btn-sm warn" data-action="revoke">Suspendre (temporaire)</button>
+        </div>` : ''}
+        <div class="row-actions" style="margin-top:8px;">
+          <button class="btn-sm danger" data-action="delete-cert">Supprimer définitivement</button>
+        </div>`;
       el.querySelectorAll('[data-zoom]').forEach(img => {
         img.addEventListener('click', () => {
           const root = document.getElementById('modal-root');
@@ -710,7 +713,7 @@
       }
       if(c.status === 'approuve'){
         el.querySelector('[data-action="revoke"]').addEventListener('click', async () => {
-          if(!confirm(`Retirer la pastille de certification de ${c.artisanName || 'cet artisan'} ? Il pourra soumettre un nouveau dossier (ex. assurance renouvelée) pour la récupérer.`)) return;
+          if(!confirm(`Suspendre la certification de ${c.artisanName || 'cet artisan'} ? La pastille disparaît immédiatement. Il pourra soumettre un nouveau dossier (ex. assurance renouvelée) pour la récupérer.`)) return;
           await updateDoc(doc(db, "certifications", c.id), { status: 'retire', reviewedAt: Date.now() });
           if(c.artisanId) await updateDoc(doc(db, "users", c.artisanId), { certificationStatus: 'aucune' }).catch(()=>{});
           c.status = 'retire';
@@ -719,6 +722,20 @@
           renderCerts();
         });
       }
+      el.querySelector('[data-action="delete-cert"]').addEventListener('click', async () => {
+        if(!confirm(`Supprimer définitivement ce dossier de certification (${c.artisanName || 'artisan'}) ? Les documents seront effacés et cette entrée disparaîtra de la liste. Cette action est irréversible.`)) return;
+        await deleteDoc(doc(db, "certifications", c.id));
+        allCerts = allCerts.filter(x => x.id !== c.id);
+        // Si ce dossier était celui qui donnait son statut actuel à l'artisan, on le remet à zéro.
+        if(c.artisanId){
+          const u = allUsers.find(x => x.uid === c.artisanId);
+          if(u && (c.status === 'approuve' || c.status === 'en_attente')){
+            await updateDoc(doc(db, "users", c.artisanId), { certificationStatus: 'aucune' }).catch(()=>{});
+            u.certificationStatus = 'aucune';
+          }
+        }
+        renderCerts();
+      });
       box.appendChild(el);
     });
   }
