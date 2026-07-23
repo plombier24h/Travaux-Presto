@@ -655,6 +655,7 @@
       el.style.alignItems = 'stretch';
       const statusTag = c.status === 'approuve' ? '<span class="tag status-active">Approuvé</span>'
         : c.status === 'refuse' ? '<span class="tag status-suspended">Refusé</span>'
+        : c.status === 'retire' ? '<span class="tag status-suspended">Certification retirée</span>'
         : '<span class="tag featured">En attente</span>';
       el.innerHTML = `
         <div class="info">
@@ -675,6 +676,10 @@
         <div class="row-actions" style="margin-top:12px;">
           <button class="btn-sm gold" data-action="approve">Approuver</button>
           <button class="btn-sm danger" data-action="refuse">Refuser</button>
+        </div>` : ''}
+        ${c.status === 'approuve' ? `
+        <div class="row-actions" style="margin-top:12px;">
+          <button class="btn-sm danger" data-action="revoke">Retirer la certification</button>
         </div>` : ''}`;
       el.querySelectorAll('[data-zoom]').forEach(img => {
         img.addEventListener('click', () => {
@@ -700,6 +705,17 @@
           c.status = 'refuse';
           const u = allUsers.find(x => x.uid === c.artisanId);
           if(u) u.certificationStatus = 'refuse';
+          renderCerts();
+        });
+      }
+      if(c.status === 'approuve'){
+        el.querySelector('[data-action="revoke"]').addEventListener('click', async () => {
+          if(!confirm(`Retirer la pastille de certification de ${c.artisanName || 'cet artisan'} ? Il pourra soumettre un nouveau dossier (ex. assurance renouvelée) pour la récupérer.`)) return;
+          await updateDoc(doc(db, "certifications", c.id), { status: 'retire', reviewedAt: Date.now() });
+          if(c.artisanId) await updateDoc(doc(db, "users", c.artisanId), { certificationStatus: 'aucune' }).catch(()=>{});
+          c.status = 'retire';
+          const u = allUsers.find(x => x.uid === c.artisanId);
+          if(u) u.certificationStatus = 'aucune';
           renderCerts();
         });
       }
