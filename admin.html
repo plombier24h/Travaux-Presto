@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Travaux Presto — Administration</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --marine: #1F3A5C;
+    --marine-clair: #2E5580;
+    --or: #D9A628;
+    --or-clair: #F2C94C;
+    --fond: #F7F7F5;
+    --carte: #FFFFFF;
+    --texte: #1A1A1A;
+    --texte-doux: #5A6472;
+    --bordure: #E1E4E8;
+    --vert: #2E9E5B;
+    --rouge: #D64545;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{
+    background:var(--fond); color:var(--texte); font-family:'Inter', sans-serif;
+    font-size:16px; min-height:100vh;
+  }
+  .hidden{display:none !important;}
+
+  /* ---- écran de connexion ---- */
+  #login-screen{
+    min-height:100vh; display:flex; flex-direction:column; align-items:center;
+    justify-content:center; padding:24px;
+  }
+  #login-screen .card{
+    width:100%; max-width:400px; background:var(--carte); border:1px solid var(--bordure);
+    border-radius:14px; padding:30px 26px; box-shadow:0 2px 12px rgba(31,58,92,0.06);
+  }
+  #login-screen h1{ font-family:'Poppins',sans-serif; font-size:20px; color:var(--marine); margin-bottom:4px; }
+  #login-screen .sub{ font-size:13px; color:var(--texte-doux); margin-bottom:20px; }
+  label{ display:block; font-size:14px; font-weight:600; color:var(--marine); margin:14px 0 6px; }
+  label:first-of-type{ margin-top:0; }
+  input{
+    width:100%; background:var(--fond); border:1.5px solid var(--bordure); color:var(--texte);
+    padding:12px 14px; border-radius:8px; font-size:15px; font-family:'Inter', sans-serif;
+  }
+  input:focus{ outline:none; border-color:var(--marine); }
+  button{ font-family:'Inter', sans-serif; cursor:pointer; }
+  .btn-primary{
+    width:100%; background:var(--marine); color:#fff; border:none; font-family:'Poppins',sans-serif;
+    font-weight:700; font-size:15px; padding:13px; border-radius:9px; margin-top:18px;
+  }
+  .btn-primary:disabled{ background:#B9C2CC; cursor:not-allowed; }
+  #login-msg{
+    margin-top:14px; font-size:14px; padding:10px 12px; border-radius:8px; display:none; font-weight:500;
+  }
+  #login-msg.error{ display:block; background:#FCE9E9; color:#B23434; border:1px solid var(--rouge); }
+
+  /* ---- dashboard ---- */
+  #dashboard{ display:none; min-height:100vh; }
+  #dashboard.show{ display:block; }
+  header.top{
+    background:var(--marine); color:#fff; padding:16px 20px; display:flex; align-items:center;
+    justify-content:space-between; flex-wrap:wrap; gap:10px;
+  }
+  header.top h1{ font-family:'Poppins',sans-serif; font-size:17px; }
+  header.top .who{ font-size:13px; opacity:0.75; }
+  #btn-logout{
+    background:rgba(255,255,255,0.12); color:#fff; border:1px solid rgba(255,255,255,0.3);
+    padding:8px 14px; border-radius:8px; font-size:13px; font-weight:600;
+  }
+  nav.tabs{
+    display:flex; gap:6px; padding:12px 20px 0; background:var(--carte); border-bottom:1px solid var(--bordure);
+    overflow-x:auto;
+  }
+  nav.tabs button{
+    background:none; border:none; padding:12px 16px; font-size:14px; font-weight:600; color:var(--texte-doux);
+    border-bottom:3px solid transparent; white-space:nowrap;
+  }
+  nav.tabs button.active{ color:var(--marine); border-bottom-color:var(--or); }
+  main{ padding:20px; max-width:1100px; margin:0 auto; }
+  .panel{ display:none; }
+  .panel.active{ display:block; }
+  .panel h2{ font-family:'Poppins',sans-serif; font-size:18px; color:var(--marine); margin-bottom:14px; }
+  .search-row{ display:flex; gap:10px; margin-bottom:16px; flex-wrap:wrap; }
+  .search-row input{ flex:1; min-width:200px; }
+  .list-row{
+    background:var(--carte); border:1px solid var(--bordure); border-radius:10px; padding:14px 16px;
+    margin-bottom:10px; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
+  }
+  .list-row .info{ flex:1; min-width:200px; }
+  .list-row .title{ font-weight:700; font-size:15px; }
+  .list-row .sub{ font-size:13px; color:var(--texte-doux); margin-top:2px; }
+  .tag{ display:inline-block; font-size:11px; font-weight:700; padding:3px 8px; border-radius:6px; margin-left:6px; text-transform:uppercase; letter-spacing:0.03em; }
+  .tag.role-artisan{ background:#FFF3D6; color:#8A6A0E; }
+  .tag.role-client{ background:#E4EEF9; color:var(--marine); }
+  .tag.status-active{ background:#E7F6EC; color:#1F7A44; }
+  .tag.status-suspended{ background:#FCE9E9; color:#B23434; }
+  .tag.featured{ background:#FDEFD3; color:#9C6B00; }
+  .row-actions{ display:flex; gap:8px; flex-wrap:wrap; }
+  .btn-sm{
+    border:1.5px solid var(--bordure); background:#fff; color:var(--texte); font-size:13px; font-weight:600;
+    padding:8px 12px; border-radius:7px;
+  }
+  .btn-sm.danger{ border-color:var(--rouge); color:var(--rouge); }
+  .btn-sm.warn{ border-color:#C98A12; color:#C98A12; }
+  .btn-sm.gold{ border-color:var(--or); color:#9C6B00; background:#FFF8E6; }
+  .btn-sm:disabled{ opacity:0.5; cursor:not-allowed; }
+  .empty{ color:var(--texte-doux); font-size:14px; padding:20px 0; text-align:center; }
+  .stats-grid{ display:grid; grid-template-columns:repeat(auto-fit, minmax(150px,1fr)); gap:12px; margin-bottom:24px; }
+  .stat-card{ background:var(--carte); border:1px solid var(--bordure); border-radius:12px; padding:18px; text-align:center; }
+  .stat-card .num{ font-family:'Poppins',sans-serif; font-size:28px; font-weight:700; color:var(--marine); }
+  .stat-card .lbl{ font-size:12px; color:var(--texte-doux); margin-top:4px; text-transform:uppercase; letter-spacing:0.04em; }
+  .chart-box{ background:var(--carte); border:1px solid var(--bordure); border-radius:12px; padding:20px; }
+  .checkbox-row{ display:flex; align-items:center; gap:10px; }
+  .checkbox-row input[type=checkbox]{ width:auto; }
+  #loading-overlay{
+    position:fixed; inset:0; background:rgba(247,247,245,0.9); display:flex; align-items:center;
+    justify-content:center; font-size:14px; color:var(--texte-doux); z-index:999;
+  }
+</style>
+</head>
+<body>
+
+<div id="login-screen">
+  <div class="card">
+    <h1>Travaux Presto — Administration</h1>
+    <div class="sub">Accès réservé. Connecte-toi avec ton compte administrateur.</div>
+    <label for="admin-email">Adresse e-mail</label>
+    <input type="email" id="admin-email" placeholder="admin@travauxpresto.fr">
+    <label for="admin-password">Mot de passe</label>
+    <input type="password" id="admin-password" placeholder="Votre mot de passe">
+    <button class="btn-primary" id="btn-admin-login">Se connecter</button>
+    <div id="login-msg"></div>
+  </div>
+</div>
+
+<div id="dashboard">
+  <header class="top">
+    <h1>Travaux Presto — Administration</h1>
+    <div style="display:flex; align-items:center; gap:14px;">
+      <span class="who" id="admin-who"></span>
+      <button id="btn-logout">Déconnexion</button>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <button data-panel="panel-users" class="active">Utilisateurs</button>
+    <button data-panel="panel-ads">Annonces</button>
+    <button data-panel="panel-reports">Avis signalés</button>
+    <button data-panel="panel-stats">Statistiques</button>
+    <button data-panel="panel-featured">Mise en avant</button>
+  </nav>
+
+  <main>
+    <!-- UTILISATEURS -->
+    <div class="panel active" id="panel-users">
+      <h2>Utilisateurs</h2>
+      <div class="search-row">
+        <input type="text" id="users-search" placeholder="Rechercher par nom, email, ville...">
+      </div>
+      <div id="users-list"><div class="empty">Chargement...</div></div>
+    </div>
+
+    <!-- ANNONCES -->
+    <div class="panel" id="panel-ads">
+      <h2>Annonces publiées</h2>
+      <div class="search-row">
+        <input type="text" id="ads-search" placeholder="Rechercher par ville, métier, description...">
+      </div>
+      <div id="ads-list"><div class="empty">Chargement...</div></div>
+    </div>
+
+    <!-- AVIS SIGNALÉS -->
+    <div class="panel" id="panel-reports">
+      <h2>Avis signalés à modérer</h2>
+      <div id="reports-list"><div class="empty">Chargement...</div></div>
+    </div>
+
+    <!-- STATISTIQUES -->
+    <div class="panel" id="panel-stats">
+      <h2>Statistiques</h2>
+      <div class="stats-grid" id="stats-grid"></div>
+      <div class="chart-box">
+        <canvas id="stats-chart" height="90"></canvas>
+      </div>
+    </div>
+
+    <!-- MISE EN AVANT -->
+    <div class="panel" id="panel-featured">
+      <h2>Mise en avant des artisans</h2>
+      <div class="sub" style="color:var(--texte-doux); font-size:13px; margin-bottom:16px;">
+        Sélectionne un ou plusieurs artisans à mettre en avant. Ils apparaîtront en haut de la liste
+        côté client dans leurs villes d'intervention, avec une rotation entre eux s'ils sont plusieurs.
+      </div>
+      <div class="search-row">
+        <input type="text" id="featured-search" placeholder="Rechercher un artisan par nom ou ville...">
+      </div>
+      <div id="featured-list"><div class="empty">Chargement...</div></div>
+    </div>
+  </main>
+</div>
+
+<div id="loading-overlay" class="hidden">Chargement...</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import {
+    getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut,
+    setPersistence, browserLocalPersistence
+  } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+  import {
+    getFirestore, collection, doc, getDocs, getDoc, deleteDoc, updateDoc, query
+  } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyDnqz1ZbSXcUnxRTi4LZCMzdwo8mTdiQBw",
+    authDomain: "travaux-presto.firebaseapp.com",
+    projectId: "travaux-presto",
+    storageBucket: "travaux-presto.firebasestorage.app",
+    messagingSenderId: "256371327938",
+    appId: "1:256371327938:web:a993a9a55b64dbc0334c5b"
+  };
+
+  const ADMIN_EMAIL = "travaux.presto.admin@gmail.com";
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+
+  const loginScreen = document.getElementById('login-screen');
+  const dashboard = document.getElementById('dashboard');
+  const loginMsg = document.getElementById('login-msg');
+  const overlay = document.getElementById('loading-overlay');
+
+  function showLoginMsg(text){ loginMsg.textContent = text; loginMsg.className = 'error'; }
+  function showOverlay(show){ overlay.classList.toggle('hidden', !show); }
+
+  document.getElementById('btn-admin-login').addEventListener('click', async () => {
+    const email = document.getElementById('admin-email').value.trim();
+    const password = document.getElementById('admin-password').value;
+    if(!email || !password){ showLoginMsg("Merci de remplir tous les champs."); return; }
+    const btn = document.getElementById('btn-admin-login');
+    btn.disabled = true;
+    try{
+      await setPersistence(auth, browserLocalPersistence);
+      await signInWithEmailAndPassword(auth, email, password);
+    }catch(err){
+      showLoginMsg("E-mail ou mot de passe incorrect.");
+    }
+    btn.disabled = false;
+  });
+
+  document.getElementById('btn-logout').addEventListener('click', () => signOut(auth));
+
+  onAuthStateChanged(auth, async (user) => {
+    if(!user){
+      dashboard.classList.remove('show');
+      loginScreen.classList.remove('hidden');
+      return;
+    }
+    if(user.email !== ADMIN_EMAIL){
+      showLoginMsg("Ce compte n'a pas accès à l'administration.");
+      await signOut(auth);
+      return;
+    }
+    loginScreen.classList.add('hidden');
+    dashboard.classList.add('show');
+    document.getElementById('admin-who').textContent = user.email;
+    initDashboard();
+  });
+
+  // ---------- NAVIGATION ONGLETS ----------
+  let dashboardInited = false;
+  document.querySelectorAll('nav.tabs button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('nav.tabs button').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById(btn.dataset.panel).classList.add('active');
+    });
+  });
+
+  // ---------- DONNÉES EN MÉMOIRE ----------
+  let allUsers = [];
+  let allAds = [];
+  let allReports = [];
+  let allCallsCount = 0;
+
+  async function initDashboard(){
+    if(dashboardInited) return;
+    dashboardInited = true;
+    showOverlay(true);
+    try{
+      await Promise.all([loadUsers(), loadAds(), loadReports(), loadCallsCount()]);
+      renderUsers();
+      renderAds();
+      renderReports();
+      renderStats();
+      renderFeatured();
+    }catch(e){
+      console.error("Erreur chargement admin:", e);
+    }
+    showOverlay(false);
+  }
+
+  async function loadUsers(){
+    const snap = await getDocs(collection(db, "users"));
+    allUsers = snap.docs.map(d => ({ uid: d.id, ...d.data() }));
+  }
+  async function loadAds(){
+    const snap = await getDocs(collection(db, "ads"));
+    allAds = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  }
+  async function loadReports(){
+    const snap = await getDocs(collection(db, "reports"));
+    allReports = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  }
+  async function loadCallsCount(){
+    const snap = await getDocs(collection(db, "calls"));
+    allCallsCount = snap.size;
+  }
+
+  // ---------- UTILISATEURS ----------
+  function renderUsers(){
+    const term = document.getElementById('users-search').value.trim().toLowerCase();
+    const box = document.getElementById('users-list');
+    const filtered = allUsers.filter(u => {
+      if(!term) return true;
+      const hay = [u.nom, u.prenom, u.email, u.ville].filter(Boolean).join(' ').toLowerCase();
+      return hay.includes(term);
+    });
+    if(!filtered.length){ box.innerHTML = '<div class="empty">Aucun utilisateur trouvé.</div>'; return; }
+    box.innerHTML = '';
+    filtered.forEach(u => {
+      const suspended = u.status === 'suspended';
+      const el = document.createElement('div');
+      el.className = 'list-row';
+      el.innerHTML = `
+        <div class="info">
+          <div class="title">${u.prenom||''} ${u.nom||''}
+            <span class="tag role-${u.role}">${u.role === 'artisan' ? 'Artisan' : 'Client'}</span>
+            <span class="tag status-${suspended ? 'suspended' : 'active'}">${suspended ? 'Suspendu' : 'Actif'}</span>
+            ${u.featured ? '<span class="tag featured">Mis en avant</span>' : ''}
+          </div>
+          <div class="sub">${u.email || ''} — ${u.ville || 'ville non renseignée'}</div>
+        </div>
+        <div class="row-actions">
+          <button class="btn-sm warn" data-action="toggle-suspend">${suspended ? 'Réactiver' : 'Suspendre'}</button>
+          <button class="btn-sm danger" data-action="delete">Supprimer</button>
+        </div>`;
+      el.querySelector('[data-action="toggle-suspend"]').addEventListener('click', async () => {
+        await updateDoc(doc(db, "users", u.uid), { status: suspended ? 'active' : 'suspended' });
+        u.status = suspended ? 'active' : 'suspended';
+        renderUsers();
+      });
+      el.querySelector('[data-action="delete"]').addEventListener('click', async () => {
+        if(!confirm(`Supprimer définitivement le compte de ${u.prenom||''} ${u.nom||''} ?\n\nNote : ceci supprime son profil Travaux Presto (annonces, avis) mais pas son compte de connexion Firebase — si besoin de le bloquer complètement, utilise plutôt "Suspendre".`)) return;
+        await deleteDoc(doc(db, "users", u.uid));
+        allUsers = allUsers.filter(x => x.uid !== u.uid);
+        renderUsers();
+        renderStats();
+      });
+      box.appendChild(el);
+    });
+  }
+  document.getElementById('users-search').addEventListener('input', renderUsers);
+
+  // ---------- ANNONCES ----------
+  function renderAds(){
+    const term = document.getElementById('ads-search').value.trim().toLowerCase();
+    const box = document.getElementById('ads-list');
+    const filtered = allAds.filter(a => {
+      if(!term) return true;
+      const hay = [a.ville, a.metier, a.description].filter(Boolean).join(' ').toLowerCase();
+      return hay.includes(term);
+    });
+    if(!filtered.length){ box.innerHTML = '<div class="empty">Aucune annonce trouvée.</div>'; return; }
+    box.innerHTML = '';
+    filtered.forEach(a => {
+      const el = document.createElement('div');
+      el.className = 'list-row';
+      el.innerHTML = `
+        <div class="info">
+          <div class="title">${a.metier || 'Annonce'} <span class="tag status-${a.status === 'ouverte' ? 'active' : 'suspended'}">${a.status === 'ouverte' ? 'Ouverte' : 'Fermée'}</span></div>
+          <div class="sub">${a.ville || ''} — ${(a.description || '').slice(0,100)}</div>
+        </div>
+        <div class="row-actions">
+          <button class="btn-sm danger" data-action="delete">Supprimer</button>
+        </div>`;
+      el.querySelector('[data-action="delete"]').addEventListener('click', async () => {
+        if(!confirm("Supprimer cette annonce ?")) return;
+        await deleteDoc(doc(db, "ads", a.id));
+        allAds = allAds.filter(x => x.id !== a.id);
+        renderAds();
+        renderStats();
+      });
+      box.appendChild(el);
+    });
+  }
+  document.getElementById('ads-search').addEventListener('input', renderAds);
+
+  // ---------- AVIS SIGNALÉS ----------
+  function renderReports(){
+    const box = document.getElementById('reports-list');
+    const pending = allReports.filter(r => r.status !== 'resolu');
+    if(!pending.length){ box.innerHTML = '<div class="empty">Aucun avis signalé en attente.</div>'; return; }
+    box.innerHTML = '';
+    pending.forEach(r => {
+      const el = document.createElement('div');
+      el.className = 'list-row';
+      el.innerHTML = `
+        <div class="info">
+          <div class="title">Avis signalé</div>
+          <div class="sub">ID avis : ${r.reviewId || '—'} — artisan : ${r.artisanId || '—'}</div>
+        </div>
+        <div class="row-actions">
+          <button class="btn-sm danger" data-action="delete-review">Supprimer l'avis</button>
+          <button class="btn-sm" data-action="dismiss">Ignorer le signalement</button>
+        </div>`;
+      el.querySelector('[data-action="delete-review"]').addEventListener('click', async () => {
+        if(!confirm("Supprimer cet avis définitivement ?")) return;
+        if(r.reviewId){ await deleteDoc(doc(db, "reviews", r.reviewId)).catch(()=>{}); }
+        await updateDoc(doc(db, "reports", r.id), { status: 'resolu' });
+        r.status = 'resolu';
+        renderReports();
+      });
+      el.querySelector('[data-action="dismiss"]').addEventListener('click', async () => {
+        await updateDoc(doc(db, "reports", r.id), { status: 'resolu' });
+        r.status = 'resolu';
+        renderReports();
+      });
+      box.appendChild(el);
+    });
+  }
+
+  // ---------- STATISTIQUES ----------
+  let chartInstance = null;
+  function renderStats(){
+    const totalUsers = allUsers.length;
+    const artisans = allUsers.filter(u => u.role === 'artisan');
+    const clients = allUsers.filter(u => u.role === 'client');
+    const artisansActifs = artisans.filter(u => u.status !== 'suspended' && u.disponible === true).length;
+    const clientsActifs = clients.filter(u => u.status !== 'suspended').length;
+    const totalAds = allAds.length;
+
+    const grid = document.getElementById('stats-grid');
+    grid.innerHTML = `
+      <div class="stat-card"><div class="num">${totalUsers}</div><div class="lbl">Utilisateurs</div></div>
+      <div class="stat-card"><div class="num">${artisans.length}</div><div class="lbl">Artisans</div></div>
+      <div class="stat-card"><div class="num">${clients.length}</div><div class="lbl">Clients</div></div>
+      <div class="stat-card"><div class="num">${artisansActifs}</div><div class="lbl">Artisans actifs</div></div>
+      <div class="stat-card"><div class="num">${clientsActifs}</div><div class="lbl">Clients actifs</div></div>
+      <div class="stat-card"><div class="num">${totalAds}</div><div class="lbl">Annonces</div></div>
+      <div class="stat-card"><div class="num">${allCallsCount}</div><div class="lbl">Appels</div></div>
+    `;
+
+    const ctx = document.getElementById('stats-chart');
+    const data = {
+      labels: ['Utilisateurs', 'Artisans', 'Clients', 'Artisans actifs', 'Clients actifs', 'Annonces', 'Appels'],
+      datasets: [{
+        label: 'Total',
+        data: [totalUsers, artisans.length, clients.length, artisansActifs, clientsActifs, totalAds, allCallsCount],
+        backgroundColor: ['#1F3A5C','#D9A628','#2E5580','#F2C94C','#2E9E5B','#5A6472','#D64545']
+      }]
+    };
+    if(chartInstance){ chartInstance.data = data; chartInstance.update(); return; }
+    chartInstance = new Chart(ctx, {
+      type: 'bar',
+      data,
+      options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
+    });
+  }
+
+  // ---------- MISE EN AVANT ----------
+  function renderFeatured(){
+    const term = document.getElementById('featured-search').value.trim().toLowerCase();
+    const box = document.getElementById('featured-list');
+    const artisans = allUsers.filter(u => u.role === 'artisan').filter(u => {
+      if(!term) return true;
+      const hay = [u.nom, u.prenom, u.ville, ...(u.villesIntervention||[])].filter(Boolean).join(' ').toLowerCase();
+      return hay.includes(term);
+    });
+    if(!artisans.length){ box.innerHTML = '<div class="empty">Aucun artisan trouvé.</div>'; return; }
+    box.innerHTML = '';
+    artisans.forEach(u => {
+      const el = document.createElement('div');
+      el.className = 'list-row';
+      el.innerHTML = `
+        <div class="info">
+          <div class="checkbox-row">
+            <input type="checkbox" id="feat-${u.uid}" ${u.featured ? 'checked' : ''}>
+            <label for="feat-${u.uid}" style="margin:0; font-weight:700; font-size:15px; color:var(--texte); cursor:pointer;">${u.prenom||''} ${u.nom||''}</label>
+            ${u.featured ? '<span class="tag featured">Mis en avant</span>' : ''}
+          </div>
+          <div class="sub">${(u.villesIntervention||[u.ville]).filter(Boolean).join(', ')}</div>
+        </div>`;
+      el.querySelector('input[type=checkbox]').addEventListener('change', async (e) => {
+        const checked = e.target.checked;
+        const payload = checked ? { featured: true, featuredAt: Date.now() } : { featured: false };
+        await updateDoc(doc(db, "users", u.uid), payload);
+        u.featured = checked;
+        renderFeatured();
+      });
+      box.appendChild(el);
+    });
+  }
+  document.getElementById('featured-search').addEventListener('input', renderFeatured);
+</script>
+</body>
+</html>

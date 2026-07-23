@@ -461,6 +461,12 @@
     if(!snap.exists()){ window.location.href = "index.html"; return; }
     currentData = snap.data();
 
+    if(currentData.status === 'suspended'){
+      await signOut(auth);
+      document.body.innerHTML = '<div style="min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px; text-align:center; font-family:Inter,sans-serif;"><div><h2 style="color:#B23434; margin-bottom:10px;">Compte suspendu</h2><p style="color:#5A6472;">Votre compte a été suspendu par l\'administration. Contactez-nous si vous pensez qu\'il s\'agit d\'une erreur.</p></div></div>';
+      return;
+    }
+
     document.getElementById('user-name').textContent = (currentData.prenom||'') + " " + (currentData.nom||'');
     document.getElementById('role-badge').textContent = currentData.role === 'artisan' ? "Artisan" : "Client";
     document.getElementById('welcome-card').style.display = 'block';
@@ -1012,8 +1018,20 @@
     if(snaps.empty){ box.innerHTML = '<div class="empty">Aucun artisan trouvé dans votre ville pour l\'instant.</div>'; if(bounds.length) clientMapInstance.setView(bounds[0], 12); return; }
     box.innerHTML = '';
 
-    for(const s of snaps.docs){
-      const d = s.data();
+    // Artisans mis en avant (promotion) : ils passent en tête de liste, avec une rotation
+    // qui change au fil du temps si plusieurs artisans sont mis en avant en même temps.
+    const allDocs = snaps.docs.map(s => ({ id: s.id, data: s.data() }));
+    const featuredDocs = allDocs.filter(x => x.data.featured === true);
+    const normalDocs = allDocs.filter(x => x.data.featured !== true);
+    if(featuredDocs.length > 1){
+      const seed = Math.floor(Date.now() / (1000 * 60 * 60)); // change chaque heure
+      featuredDocs.forEach((x, i) => { x.rotKey = (((x.data.featuredAt || 0) % 997) + seed * 97 + i * 31) % 997; });
+      featuredDocs.sort((a, b) => a.rotKey - b.rotKey);
+    }
+    const orderedDocs = [...featuredDocs, ...normalDocs];
+
+    for(const s of orderedDocs){
+      const d = s.data;
       d.uid = s.id;
       const dispo = d.disponible === true;
       const avg = d.noteMoyenne || 0, count = d.nbAvis || 0;
@@ -1029,11 +1047,12 @@
 
       const el = document.createElement('div');
       el.className = 'item';
+      if(d.featured) el.style.cssText = 'border:1.5px solid var(--or); background:#FFFBF0;';
       el.innerHTML = `
         <div class="item-top">
           ${avatarHtml(d.photo, d.prenom+' '+d.nom, 44, true)}
           <div>
-            <div class="item-title"><span class="dispo-dot ${dispo?'vert':'rouge'}"></span>${d.prenom} ${d.nom}</div>
+            <div class="item-title"><span class="dispo-dot ${dispo?'vert':'rouge'}"></span>${d.prenom} ${d.nom}${d.featured ? ' <span style="font-size:10px; font-weight:700; color:#9C6B00; background:#FDEFD3; padding:2px 7px; border-radius:6px; text-transform:uppercase; letter-spacing:0.03em;">Recommandé</span>' : ''}</div>
             <div class="item-sub">${(d.metiers||[]).join(', ')}</div>
             <div style="margin-top:4px;">${renderStars(avg, count)}</div>
           </div>
