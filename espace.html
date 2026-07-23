@@ -105,12 +105,12 @@
 
   .call-screen{position:fixed; inset:0; background:radial-gradient(circle at 50% 25%, #2E5580 0%, #0B1622 70%); z-index:3000; display:flex; flex-direction:column; align-items:center; justify-content:space-between; color:#fff; text-align:center; padding:60px 30px 70px;}
   .call-top{display:flex; flex-direction:column; align-items:center;}
-  .call-name{font-family:'Poppins',sans-serif; font-size:24px; font-weight:700; margin-top:20px; position:relative; z-index:2; letter-spacing:0.01em;}
-  .call-status{font-size:13px; opacity:0.65; margin-top:6px; position:relative; z-index:2; letter-spacing:0.06em; text-transform:uppercase;}
-  .call-avatar{width:112px; height:112px; border-radius:50%; background:linear-gradient(155deg, rgba(217,166,40,0.35), rgba(46,85,128,0.5)); border:1px solid rgba(255,255,255,0.22); display:flex; align-items:center; justify-content:center; font-size:38px; font-weight:700; font-family:'Poppins',sans-serif; position:relative; z-index:2; box-shadow:0 8px 30px rgba(0,0,0,0.35); animation:call-pulse 2s ease-out infinite; overflow:hidden;}
+  .call-name{font-family:'Poppins',sans-serif; font-size:19px; font-weight:700; margin-top:14px; position:relative; z-index:2; letter-spacing:0.01em;}
+  .call-status{font-size:12px; opacity:0.65; margin-top:5px; position:relative; z-index:2; letter-spacing:0.06em; text-transform:uppercase;}
+  .call-avatar{width:76px; height:76px; border-radius:50%; background:linear-gradient(155deg, rgba(217,166,40,0.35), rgba(46,85,128,0.5)); border:1px solid rgba(255,255,255,0.22); display:flex; align-items:center; justify-content:center; font-size:26px; font-weight:700; font-family:'Poppins',sans-serif; position:relative; z-index:2; box-shadow:0 8px 30px rgba(0,0,0,0.35); animation:call-pulse 2s ease-out infinite; overflow:hidden;}
   @keyframes call-pulse{
     0%{ box-shadow:0 8px 30px rgba(0,0,0,0.35), 0 0 0 0 rgba(255,255,255,0.18); }
-    70%{ box-shadow:0 8px 30px rgba(0,0,0,0.35), 0 0 0 26px rgba(255,255,255,0); }
+    70%{ box-shadow:0 8px 30px rgba(0,0,0,0.35), 0 0 0 18px rgba(255,255,255,0); }
     100%{ box-shadow:0 8px 30px rgba(0,0,0,0.35), 0 0 0 0 rgba(255,255,255,0); }
   }
 
@@ -139,13 +139,13 @@
     box-shadow:0 0 0 1px rgba(255,107,107,0.2), 0 0 18px rgba(255,90,90,0.4);
   }
   .call-btn.hangup{
-    width:66px; height:66px; color:#fff; border-color:#E14848;
-    background:#E14848;
+    width:66px; height:66px; color:#FF4B4B; border-color:rgba(255,107,107,0.7);
+    background:linear-gradient(155deg, rgba(255,107,107,0.28), rgba(160,35,35,0.4));
     box-shadow:0 0 0 1px rgba(255,107,107,0.3), 0 0 28px rgba(255,70,70,0.5);
   }
   .call-btn.accept{
-    width:66px; height:66px; color:#fff; border-color:#3FBE72;
-    background:#3FBE72;
+    width:66px; height:66px; color:#4CE28C; border-color:rgba(79,216,146,0.7);
+    background:linear-gradient(155deg, rgba(79,216,146,0.28), rgba(30,130,75,0.4));
     box-shadow:0 0 0 1px rgba(79,216,146,0.3), 0 0 28px rgba(70,220,140,0.5);
   }
 

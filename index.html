@@ -168,6 +168,29 @@
     display:flex;
     align-items:center;
   }
+  .tabs{
+    width:100%; max-width:440px; display:flex; gap:10px; margin-bottom:16px;
+  }
+  @media (min-width: 760px){ .tabs{ max-width:460px; } }
+  .tab-btn{
+    flex:1; padding:14px 10px; border-radius:10px; border:2px solid var(--marine);
+    background:#fff; color:var(--marine); font-family:'Poppins', sans-serif;
+    font-weight:700; font-size:15px; cursor:pointer; transition:background .15s, color .15s;
+  }
+  .tab-btn.active{ background:var(--marine); color:#fff; }
+  .btn-google{
+    width:100%; display:flex; align-items:center; justify-content:center; gap:10px;
+    background:#fff; border:1.5px solid var(--bordure); color:var(--texte);
+    font-family:'Inter', sans-serif; font-weight:600; font-size:15px;
+    padding:13px; border-radius:10px; cursor:pointer; margin-top:14px;
+  }
+  .btn-google:active{ background:#F2F2F2; }
+  .btn-google svg{ flex-shrink:0; }
+  .divider{
+    display:flex; align-items:center; gap:12px; margin-top:20px;
+    color:var(--texte-doux); font-size:13px;
+  }
+  .divider::before, .divider::after{ content:''; flex:1; height:1px; background:var(--bordure); }
 </style>
 </head>
 <body>
@@ -176,10 +199,21 @@
   <img src="logo.png" alt="Travaux Presto">
 </header>
 
+<div class="tabs">
+  <button type="button" class="tab-btn active" id="tab-account">Créer un compte</button>
+  <button type="button" class="tab-btn" id="tab-login">Se connecter</button>
+</div>
+
 <div class="card">
 
   <!-- ÉTAPE 1 : informations de compte -->
   <div class="step active" id="step-account">
+    <button type="button" class="btn-google" id="btn-google-signup">
+      <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303c-1.649 4.657-6.08 8-11.303 8-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z"/><path fill="#FF3D00" d="M6.306 14.691l6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 16.318 4 9.656 8.337 6.306 14.691z"/><path fill="#4CAF50" d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238A11.91 11.91 0 0 1 24 36c-5.202 0-9.619-3.317-11.283-7.946l-6.522 5.025C9.505 39.556 16.227 44 24 44z"/><path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303a12.04 12.04 0 0 1-4.087 5.571l.003-.002 6.19 5.238C36.971 39.205 44 34 44 24c0-1.341-.138-2.65-.389-3.917z"/></svg>
+      Continuer avec Google
+    </button>
+    <div class="divider">ou</div>
+
     <label for="nom">Nom</label>
     <input type="text" id="nom" placeholder="Dupont">
 
@@ -215,6 +249,31 @@
     <div class="switch-link">Déjà inscrit ? <a href="#" id="go-login">Se connecter</a></div>
   </div>
 
+  <!-- ÉTAPE GOOGLE : complément de profil pour un nouveau compte Google -->
+  <div class="step" id="step-google-complete">
+    <label>Bienvenue ! Encore une étape pour finaliser ton compte.</label>
+    <label for="g-nom">Nom</label>
+    <input type="text" id="g-nom" placeholder="Dupont">
+    <label for="g-prenom">Prénom</label>
+    <input type="text" id="g-prenom" placeholder="Jean">
+    <label for="g-ville">Ville</label>
+    <input type="text" id="g-ville" placeholder="Paris">
+    <label>Vous êtes ?</label>
+    <div class="roles" id="g-roles">
+      <div class="role-tile" data-role="artisan">
+        <span class="icon">🔧</span>
+        <div class="label">Artisan</div>
+        <div class="sub">Je propose mes services</div>
+      </div>
+      <div class="role-tile" data-role="client">
+        <span class="icon">🏠</span>
+        <div class="label">Client</div>
+        <div class="sub">Je cherche un artisan</div>
+      </div>
+    </div>
+    <button class="primary" id="btn-google-submit" disabled>Terminer mon inscription</button>
+  </div>
+
   <!-- ÉTAPE 2 : choix du rôle -->
   <div class="step" id="step-role">
     <button class="back-btn" id="btn-back">← Retour</button>
@@ -236,6 +295,12 @@
 
   <!-- CONNEXION -->
   <div class="step" id="step-login">
+    <button type="button" class="btn-google" id="btn-google-login">
+      <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303c-1.649 4.657-6.08 8-11.303 8-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z"/><path fill="#FF3D00" d="M6.306 14.691l6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 16.318 4 9.656 8.337 6.306 14.691z"/><path fill="#4CAF50" d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238A11.91 11.91 0 0 1 24 36c-5.202 0-9.619-3.317-11.283-7.946l-6.522 5.025C9.505 39.556 16.227 44 24 44z"/><path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303a12.04 12.04 0 0 1-4.087 5.571l.003-.002 6.19 5.238C36.971 39.205 44 34 44 24c0-1.341-.138-2.65-.389-3.917z"/></svg>
+      Continuer avec Google
+    </button>
+    <div class="divider">ou</div>
+
     <label for="login-email">Adresse e-mail</label>
     <input type="email" id="login-email" placeholder="jean.dupont@email.com">
     <label for="login-password">Mot de passe</label>
@@ -259,10 +324,11 @@
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
   import {
-    getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail
+    getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail,
+    setPersistence, browserLocalPersistence, onAuthStateChanged, GoogleAuthProvider, signInWithPopup
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
   import {
-    getFirestore, doc, setDoc, serverTimestamp
+    getFirestore, doc, setDoc, getDoc, serverTimestamp
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
   const firebaseConfig = {
@@ -277,13 +343,20 @@
   const app = initializeApp(firebaseConfig);
   const auth = getAuth(app);
   const db = getFirestore(app);
+  const googleProvider = new GoogleAuthProvider();
 
   let selectedRole = null;
+  let googleSelectedRole = null;
+  let googleUid = null;
+  let skipNextAuthRedirect = false;
 
   const stepAccount = document.getElementById('step-account');
   const stepRole = document.getElementById('step-role');
   const stepLogin = document.getElementById('step-login');
+  const stepGoogle = document.getElementById('step-google-complete');
   const msg = document.getElementById('msg');
+  const tabAccount = document.getElementById('tab-account');
+  const tabLogin = document.getElementById('tab-login');
 
   function showMsg(text, type){
     msg.textContent = text;
@@ -291,10 +364,91 @@
   }
 
   function showStep(step){
-    [stepAccount, stepRole, stepLogin].forEach(s => s.classList.remove('active'));
+    [stepAccount, stepRole, stepLogin, stepGoogle].forEach(s => s.classList.remove('active'));
     step.classList.add('active');
     msg.className = '';
+    tabAccount.classList.toggle('active', step !== stepLogin);
+    tabLogin.classList.toggle('active', step === stepLogin);
   }
+
+  tabAccount.addEventListener('click', () => showStep(stepAccount));
+  tabLogin.addEventListener('click', () => showStep(stepLogin));
+
+  // Reste connecté : on force la persistance locale, puis on redirige automatiquement
+  // vers l'espace si l'utilisateur est déjà authentifié (il n'a pas à retaper ses identifiants).
+  setPersistence(auth, browserLocalPersistence).then(() => {
+    onAuthStateChanged(auth, async (user) => {
+      if(!user || skipNextAuthRedirect) return;
+      try{
+        const snap = await getDoc(doc(db, "users", user.uid));
+        if(snap.exists()){
+          window.location.href = "espace.html";
+        }
+      }catch(e){ /* pas grave, l'utilisateur reste sur la page de connexion */ }
+    });
+  });
+
+  async function handleGoogleSignIn(){
+    try{
+      const cred = await signInWithPopup(auth, googleProvider);
+      const user = cred.user;
+      const snap = await getDoc(doc(db, "users", user.uid));
+      if(snap.exists()){
+        window.location.href = "espace.html";
+        return;
+      }
+      // Nouveau compte Google : on complète le profil (ville + rôle)
+      skipNextAuthRedirect = true;
+      googleUid = user.uid;
+      const parts = (user.displayName || '').split(' ');
+      document.getElementById('g-prenom').value = parts[0] || '';
+      document.getElementById('g-nom').value = parts.slice(1).join(' ') || '';
+      showStep(stepGoogle);
+    }catch(err){
+      if(err.code === 'auth/popup-closed-by-user') return;
+      showMsg("Connexion Google impossible : " + (err.message || err.code), "error");
+    }
+  }
+
+  document.getElementById('btn-google-signup').addEventListener('click', handleGoogleSignIn);
+  document.getElementById('btn-google-login').addEventListener('click', handleGoogleSignIn);
+
+  document.querySelectorAll('#g-roles .role-tile').forEach(tile => {
+    tile.addEventListener('click', () => {
+      document.querySelectorAll('#g-roles .role-tile').forEach(t => t.classList.remove('selected'));
+      tile.classList.add('selected');
+      googleSelectedRole = tile.dataset.role;
+      document.getElementById('btn-google-submit').disabled = false;
+    });
+  });
+
+  document.getElementById('btn-google-submit').addEventListener('click', async () => {
+    const nom = document.getElementById('g-nom').value.trim();
+    const prenom = document.getElementById('g-prenom').value.trim();
+    const ville = document.getElementById('g-ville').value.trim();
+    if(!nom || !prenom || !ville || !googleSelectedRole){
+      showMsg("Merci de remplir tous les champs.", "error");
+      return;
+    }
+    const btn = document.getElementById('btn-google-submit');
+    btn.disabled = true;
+    btn.textContent = "Création en cours...";
+    try{
+      await setDoc(doc(db, "users", googleUid), {
+        nom, prenom, email: auth.currentUser ? auth.currentUser.email : '', ville,
+        role: googleSelectedRole,
+        status: "active",
+        disponible: googleSelectedRole === "artisan" ? true : null,
+        createdAt: serverTimestamp()
+      });
+      showMsg("Compte créé avec succès !", "ok");
+      setTimeout(() => { window.location.href = "espace.html"; }, 800);
+    }catch(err){
+      btn.disabled = false;
+      btn.textContent = "Terminer mon inscription";
+      showMsg("Erreur : " + err.message, "error");
+    }
+  });
 
   document.querySelectorAll('.eye-btn').forEach(btn => {
     btn.addEventListener('click', () => {
