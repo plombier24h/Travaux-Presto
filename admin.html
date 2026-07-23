@@ -118,6 +118,20 @@
     position:fixed; inset:0; background:rgba(247,247,245,0.9); display:flex; align-items:center;
     justify-content:center; font-size:14px; color:var(--texte-doux); z-index:999;
   }
+  .modal-bg{
+    position:fixed; inset:0; background:rgba(20,30,45,0.55); display:flex; align-items:center;
+    justify-content:center; z-index:1500; padding:20px;
+  }
+  .modal-box{
+    background:var(--carte); border-radius:14px; padding:24px; max-width:560px; width:100%;
+    max-height:82vh; overflow-y:auto; position:relative;
+  }
+  .modal-box .modal-close{
+    position:absolute; top:16px; right:16px; background:none; border:none; font-size:14px;
+    color:var(--texte-doux); font-weight:600;
+  }
+  .modal-box h2{ font-family:'Poppins',sans-serif; font-size:17px; color:var(--marine); margin-bottom:14px; padding-right:60px; }
+  .doc-thumb{ width:100%; max-height:280px; object-fit:contain; border-radius:8px; border:1px solid var(--bordure); margin-top:8px; background:#f5f5f5; }
 </style>
 </head>
 <body>
@@ -150,6 +164,7 @@
     <button data-panel="panel-reports">Avis signalés</button>
     <button data-panel="panel-stats">Statistiques</button>
     <button data-panel="panel-featured">Mise en avant</button>
+    <button data-panel="panel-certs">Certifications<span id="certs-badge" class="hidden" style="margin-left:6px; background:var(--rouge); color:#fff; border-radius:10px; font-size:11px; padding:1px 7px;"></span></button>
   </nav>
 
   <main>
@@ -198,10 +213,21 @@
       </div>
       <div id="featured-list"><div class="empty">Chargement...</div></div>
     </div>
+
+    <!-- CERTIFICATIONS -->
+    <div class="panel" id="panel-certs">
+      <h2>Certifications professionnelles</h2>
+      <div class="sub" style="color:var(--texte-doux); font-size:13px; margin-bottom:16px;">
+        Dossiers K-bis + assurance RC décennale envoyés par les artisans. Approuve pour afficher la pastille
+        de validation sur leur profil, ou refuse s'ils sont invalides.
+      </div>
+      <div id="certs-list"><div class="empty">Chargement...</div></div>
+    </div>
   </main>
 </div>
 
 <div id="loading-overlay" class="hidden">Chargement...</div>
+<div id="modal-root"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <script type="module">
@@ -286,19 +312,22 @@
   let allUsers = [];
   let allAds = [];
   let allReports = [];
+  let allCalls = [];
   let allCallsCount = 0;
+  let allCerts = [];
 
   async function initDashboard(){
     if(dashboardInited) return;
     dashboardInited = true;
     showOverlay(true);
     try{
-      await Promise.all([loadUsers(), loadAds(), loadReports(), loadCallsCount()]);
+      await Promise.all([loadUsers(), loadAds(), loadReports(), loadCallsCount(), loadCerts()]);
       renderUsers();
       renderAds();
       renderReports();
       renderStats();
       renderFeatured();
+      renderCerts();
     }catch(e){
       console.error("Erreur chargement admin:", e);
     }
@@ -319,7 +348,12 @@
   }
   async function loadCallsCount(){
     const snap = await getDocs(collection(db, "calls"));
+    allCalls = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     allCallsCount = snap.size;
+  }
+  async function loadCerts(){
+    const snap = await getDocs(collection(db, "certifications"));
+    allCerts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
   }
 
   // ---------- UTILISATEURS ----------
@@ -405,27 +439,50 @@
   function renderReports(){
     const box = document.getElementById('reports-list');
     const pending = allReports.filter(r => r.status !== 'resolu');
-    if(!pending.length){ box.innerHTML = '<div class="empty">Aucun avis signalé en attente.</div>'; return; }
+    if(!pending.length){ box.innerHTML = '<div class="empty">Aucun signalement en attente.</div>'; return; }
     box.innerHTML = '';
     pending.forEach(r => {
+      const isUser = r.type === 'utilisateur';
       const el = document.createElement('div');
       el.className = 'list-row';
-      el.innerHTML = `
-        <div class="info">
-          <div class="title">Avis signalé</div>
-          <div class="sub">ID avis : ${r.reviewId || '—'} — artisan : ${r.artisanId || '—'}</div>
-        </div>
-        <div class="row-actions">
-          <button class="btn-sm danger" data-action="delete-review">Supprimer l'avis</button>
-          <button class="btn-sm" data-action="dismiss">Ignorer le signalement</button>
-        </div>`;
-      el.querySelector('[data-action="delete-review"]').addEventListener('click', async () => {
-        if(!confirm("Supprimer cet avis définitivement ?")) return;
-        if(r.reviewId){ await deleteDoc(doc(db, "reviews", r.reviewId)).catch(()=>{}); }
-        await updateDoc(doc(db, "reports", r.id), { status: 'resolu' });
-        r.status = 'resolu';
-        renderReports();
-      });
+      if(isUser){
+        el.innerHTML = `
+          <div class="info">
+            <div class="title">Utilisateur signalé : ${r.reportedName || r.reportedUid || '—'}</div>
+            <div class="sub">Par ${r.reporterName || r.reporterUid || '—'} — motif : ${r.motif || '—'}</div>
+          </div>
+          <div class="row-actions">
+            <button class="btn-sm danger" data-action="suspend-user">Suspendre ce compte</button>
+            <button class="btn-sm" data-action="dismiss">Ignorer</button>
+          </div>`;
+        el.querySelector('[data-action="suspend-user"]').addEventListener('click', async () => {
+          if(!r.reportedUid){ alert('Utilisateur introuvable.'); return; }
+          if(!confirm(`Suspendre le compte de ${r.reportedName || r.reportedUid} ?`)) return;
+          await updateDoc(doc(db, "users", r.reportedUid), { status: 'suspended' }).catch(()=>{});
+          const u = allUsers.find(x => x.uid === r.reportedUid);
+          if(u) u.status = 'suspended';
+          await updateDoc(doc(db, "reports", r.id), { status: 'resolu' });
+          r.status = 'resolu';
+          renderReports(); renderUsers();
+        });
+      } else {
+        el.innerHTML = `
+          <div class="info">
+            <div class="title">Avis signalé</div>
+            <div class="sub">ID avis : ${r.reviewId || '—'} — artisan : ${r.artisanId || '—'} — motif : ${r.motif || '—'}</div>
+          </div>
+          <div class="row-actions">
+            <button class="btn-sm danger" data-action="delete-review">Supprimer l'avis</button>
+            <button class="btn-sm" data-action="dismiss">Ignorer le signalement</button>
+          </div>`;
+        el.querySelector('[data-action="delete-review"]').addEventListener('click', async () => {
+          if(!confirm("Supprimer cet avis définitivement ?")) return;
+          if(r.reviewId){ await deleteDoc(doc(db, "reviews", r.reviewId)).catch(()=>{}); }
+          await updateDoc(doc(db, "reports", r.id), { status: 'resolu' });
+          r.status = 'resolu';
+          renderReports();
+        });
+      }
       el.querySelector('[data-action="dismiss"]').addEventListener('click', async () => {
         await updateDoc(doc(db, "reports", r.id), { status: 'resolu' });
         r.status = 'resolu';
@@ -447,14 +504,18 @@
 
     const grid = document.getElementById('stats-grid');
     grid.innerHTML = `
-      <div class="stat-card"><div class="num">${totalUsers}</div><div class="lbl">Utilisateurs</div></div>
-      <div class="stat-card"><div class="num">${artisans.length}</div><div class="lbl">Artisans</div></div>
-      <div class="stat-card"><div class="num">${clients.length}</div><div class="lbl">Clients</div></div>
-      <div class="stat-card"><div class="num">${artisansActifs}</div><div class="lbl">Artisans actifs</div></div>
-      <div class="stat-card"><div class="num">${clientsActifs}</div><div class="lbl">Clients actifs</div></div>
-      <div class="stat-card"><div class="num">${totalAds}</div><div class="lbl">Annonces</div></div>
-      <div class="stat-card"><div class="num">${allCallsCount}</div><div class="lbl">Appels</div></div>
+      <div class="stat-card" data-stat="users"><div class="num">${totalUsers}</div><div class="lbl">Utilisateurs</div></div>
+      <div class="stat-card" data-stat="artisans"><div class="num">${artisans.length}</div><div class="lbl">Artisans</div></div>
+      <div class="stat-card" data-stat="clients"><div class="num">${clients.length}</div><div class="lbl">Clients</div></div>
+      <div class="stat-card" data-stat="artisansActifs"><div class="num">${artisansActifs}</div><div class="lbl">Artisans actifs</div></div>
+      <div class="stat-card" data-stat="clientsActifs"><div class="num">${clientsActifs}</div><div class="lbl">Clients actifs</div></div>
+      <div class="stat-card" data-stat="ads"><div class="num">${totalAds}</div><div class="lbl">Annonces</div></div>
+      <div class="stat-card" data-stat="calls"><div class="num">${allCallsCount}</div><div class="lbl">Appels</div></div>
     `;
+    grid.querySelectorAll('.stat-card').forEach(card => {
+      card.style.cursor = 'pointer';
+      card.addEventListener('click', () => openStatDrilldown(card.dataset.stat));
+    });
 
     const ctx = document.getElementById('stats-chart');
     const data = {
@@ -470,6 +531,58 @@
       type: 'bar',
       data,
       options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
+    });
+  }
+
+  function closeModal(){ document.getElementById('modal-root').innerHTML = ''; }
+
+  // Chaque statistique correspond à un sous-ensemble de comptes/éléments, avec une action
+  // de "réinitialisation" qui retire l'élément de ce sous-ensemble (un par un).
+  function openStatDrilldown(key){
+    const configs = {
+      users: { title: 'Tous les utilisateurs', items: allUsers, label: u => `${u.prenom||''} ${u.nom||''} (${u.role})`, sub: u => u.email || '', resetLabel: 'Supprimer', reset: async u => { await deleteDoc(doc(db, "users", u.uid)); allUsers = allUsers.filter(x=>x.uid!==u.uid); } },
+      artisans: { title: 'Artisans', items: allUsers.filter(u=>u.role==='artisan'), label: u => `${u.prenom||''} ${u.nom||''}`, sub: u => u.ville || '', resetLabel: 'Supprimer', reset: async u => { await deleteDoc(doc(db, "users", u.uid)); allUsers = allUsers.filter(x=>x.uid!==u.uid); } },
+      clients: { title: 'Clients', items: allUsers.filter(u=>u.role==='client'), label: u => `${u.prenom||''} ${u.nom||''}`, sub: u => u.ville || '', resetLabel: 'Supprimer', reset: async u => { await deleteDoc(doc(db, "users", u.uid)); allUsers = allUsers.filter(x=>x.uid!==u.uid); } },
+      artisansActifs: { title: 'Artisans actifs', items: allUsers.filter(u=>u.role==='artisan' && u.status!=='suspended' && u.disponible===true), label: u => `${u.prenom||''} ${u.nom||''}`, sub: u => u.ville || '', resetLabel: 'Rendre indisponible', reset: async u => { await updateDoc(doc(db,"users",u.uid), { disponible: false }); u.disponible = false; } },
+      clientsActifs: { title: 'Clients actifs', items: allUsers.filter(u=>u.role==='client' && u.status!=='suspended'), label: u => `${u.prenom||''} ${u.nom||''}`, sub: u => u.ville || '', resetLabel: 'Suspendre', reset: async u => { await updateDoc(doc(db,"users",u.uid), { status: 'suspended' }); u.status = 'suspended'; } },
+      ads: { title: 'Annonces publiées', items: allAds, label: a => a.metier || 'Annonce', sub: a => a.ville || '', resetLabel: 'Supprimer', reset: async a => { await deleteDoc(doc(db, "ads", a.id)); allAds = allAds.filter(x=>x.id!==a.id); } },
+      calls: { title: 'Appels', items: allCalls, label: c => (c.callerName || 'Appel') + (c.type==='video' ? ' (vidéo)' : ''), sub: c => c.status || '', resetLabel: 'Supprimer', reset: async c => { await deleteDoc(doc(db, "calls", c.id)); allCalls = allCalls.filter(x=>x.id!==c.id); } }
+    };
+    const cfg = configs[key];
+    if(!cfg) return;
+    renderDrilldown(cfg, key);
+  }
+
+  function renderDrilldown(cfg, key){
+    const root = document.getElementById('modal-root');
+    const rows = cfg.items.length
+      ? cfg.items.map((item, i) => `
+          <div class="list-row" data-i="${i}">
+            <div class="info"><div class="title">${cfg.label(item)}</div><div class="sub">${cfg.sub(item)}</div></div>
+            <div class="row-actions"><button class="btn-sm warn" data-action="reset">${cfg.resetLabel}</button></div>
+          </div>`).join('')
+      : '<div class="empty">Aucun élément.</div>';
+    root.innerHTML = `
+      <div class="modal-bg" id="drill-bg">
+        <div class="modal-box">
+          <button class="modal-close" id="drill-close">Fermer</button>
+          <h2>${cfg.title} (${cfg.items.length})</h2>
+          <div id="drill-rows">${rows}</div>
+        </div>
+      </div>`;
+    document.getElementById('drill-close').addEventListener('click', closeModal);
+    document.getElementById('drill-bg').addEventListener('click', (e) => { if(e.target.id==='drill-bg') closeModal(); });
+    root.querySelectorAll('[data-action="reset"]').forEach((btn, i) => {
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        try{
+          await cfg.reset(cfg.items[i]);
+          renderStats();
+          renderUsers();
+          renderAds();
+          openStatDrilldown(key);
+        }catch(e){ console.error(e); btn.disabled = false; }
+      });
     });
   }
 
@@ -507,6 +620,77 @@
     });
   }
   document.getElementById('featured-search').addEventListener('input', renderFeatured);
+
+  // ---------- CERTIFICATIONS ----------
+  function renderCerts(){
+    const box = document.getElementById('certs-list');
+    const pending = allCerts.filter(c => c.status === 'en_attente');
+    const badge = document.getElementById('certs-badge');
+    if(pending.length){ badge.textContent = pending.length; badge.classList.remove('hidden'); }
+    else { badge.classList.add('hidden'); }
+
+    if(!allCerts.length){ box.innerHTML = '<div class="empty">Aucune demande de certification.</div>'; return; }
+    box.innerHTML = '';
+    // en attente d'abord, puis historique (approuvé/refusé)
+    const sorted = [...pending, ...allCerts.filter(c => c.status !== 'en_attente')];
+    sorted.forEach(c => {
+      const el = document.createElement('div');
+      el.className = 'list-row';
+      el.style.flexDirection = 'column';
+      el.style.alignItems = 'stretch';
+      const statusTag = c.status === 'approuve' ? '<span class="tag status-active">Approuvé</span>'
+        : c.status === 'refuse' ? '<span class="tag status-suspended">Refusé</span>'
+        : '<span class="tag featured">En attente</span>';
+      el.innerHTML = `
+        <div class="info">
+          <div class="title">${c.artisanName || c.artisanId || '—'} ${statusTag}</div>
+          <div class="sub">${c.artisanEmail || ''}</div>
+        </div>
+        <div style="display:flex; gap:10px; margin-top:10px; flex-wrap:wrap;">
+          <div style="flex:1; min-width:140px;">
+            <div class="sub" style="margin-bottom:4px;">K-bis</div>
+            <img class="doc-thumb" src="${c.kbisImage}" style="cursor:zoom-in;" data-zoom="${c.kbisImage}">
+          </div>
+          <div style="flex:1; min-width:140px;">
+            <div class="sub" style="margin-bottom:4px;">Assurance RC décennale</div>
+            <img class="doc-thumb" src="${c.assuranceImage}" style="cursor:zoom-in;" data-zoom="${c.assuranceImage}">
+          </div>
+        </div>
+        ${c.status === 'en_attente' ? `
+        <div class="row-actions" style="margin-top:12px;">
+          <button class="btn-sm gold" data-action="approve">Approuver</button>
+          <button class="btn-sm danger" data-action="refuse">Refuser</button>
+        </div>` : ''}`;
+      el.querySelectorAll('[data-zoom]').forEach(img => {
+        img.addEventListener('click', () => {
+          const root = document.getElementById('modal-root');
+          root.innerHTML = `<div class="modal-bg" id="zoom-bg"><div class="modal-box"><button class="modal-close" id="zoom-close">Fermer</button><h2>Document</h2><img src="${img.dataset.zoom}" style="width:100%; border-radius:8px;"></div></div>`;
+          document.getElementById('zoom-close').addEventListener('click', closeModal);
+          document.getElementById('zoom-bg').addEventListener('click', (e) => { if(e.target.id==='zoom-bg') closeModal(); });
+        });
+      });
+      if(c.status === 'en_attente'){
+        el.querySelector('[data-action="approve"]').addEventListener('click', async () => {
+          await updateDoc(doc(db, "certifications", c.id), { status: 'approuve', reviewedAt: Date.now() });
+          if(c.artisanId) await updateDoc(doc(db, "users", c.artisanId), { certificationStatus: 'certifie' }).catch(()=>{});
+          c.status = 'approuve';
+          const u = allUsers.find(x => x.uid === c.artisanId);
+          if(u) u.certificationStatus = 'certifie';
+          renderCerts();
+        });
+        el.querySelector('[data-action="refuse"]').addEventListener('click', async () => {
+          if(!confirm("Refuser ce dossier de certification ?")) return;
+          await updateDoc(doc(db, "certifications", c.id), { status: 'refuse', reviewedAt: Date.now() });
+          if(c.artisanId) await updateDoc(doc(db, "users", c.artisanId), { certificationStatus: 'refuse' }).catch(()=>{});
+          c.status = 'refuse';
+          const u = allUsers.find(x => x.uid === c.artisanId);
+          if(u) u.certificationStatus = 'refuse';
+          renderCerts();
+        });
+      }
+      box.appendChild(el);
+    });
+  }
 </script>
 </body>
 </html>

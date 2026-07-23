@@ -54,6 +54,8 @@
   .avatar-img{width:64px; height:64px; border-radius:50%; object-fit:cover; display:block;}
   .avatar-edit{position:absolute; bottom:-2px; right:-2px; width:22px; height:22px; border-radius:50%; background:var(--or); color:#1A1A1A; font-size:12px; display:flex; align-items:center; justify-content:center; border:2px solid #fff;}
   .role-badge{display:inline-block; margin-top:8px; background:#FFF8E6; color:#8A6B12; border:1px solid var(--or); font-size:12px; font-weight:600; padding:3px 9px; border-radius:20px;}
+  .cert-badge{display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px; border-radius:50%; background:#2E7BD6; color:#fff; margin-left:4px; vertical-align:middle;}
+  .cert-badge svg{width:10px; height:10px;}
   .preview-banner{background:#FFF3D6; border:1px solid var(--or); color:#8A6B12; font-size:13px; font-weight:600; padding:10px 14px; border-radius:8px; margin-bottom:14px; text-align:center;}
   .dispo-row{display:flex; align-items:center; justify-content:space-between; margin-top:16px; padding-top:16px; border-top:1px solid var(--bordure);}
   .dispo-label{font-weight:600; font-size:15px;}
@@ -323,6 +325,11 @@
     </div>
   </div>
 
+  <div class="card" id="artisan-cert-card">
+    <h2>Certification professionnelle</h2>
+    <div id="cert-status-box"><div class="empty">Chargement...</div></div>
+  </div>
+
   <div class="card" id="artisan-reviews-card">
     <h2>Mes avis</h2>
     <div id="my-reviews-list"><div class="empty">Chargement...</div></div>
@@ -467,7 +474,7 @@
       return;
     }
 
-    document.getElementById('user-name').textContent = (currentData.prenom||'') + " " + (currentData.nom||'');
+    document.getElementById('user-name').innerHTML = (currentData.prenom||'') + " " + (currentData.nom||'') + (currentData.role === 'artisan' && currentData.certificationStatus === 'certifie' ? certBadgeHtml() : '');
     document.getElementById('role-badge').textContent = currentData.role === 'artisan' ? "Artisan" : "Client";
     document.getElementById('welcome-card').style.display = 'block';
     setupAvatar();
@@ -482,6 +489,7 @@
       document.getElementById('a-telephone').value = currentData.telephone || '';
       document.getElementById('a-horaires').value = currentData.horaires || '';
       if(currentData.lat) document.getElementById('a-locate-status').textContent = "Position enregistrée ✓";
+      renderCertificationCard();
     } else {
       document.getElementById('c-email-display').value = currentData.email || '';
       document.getElementById('c-ville').value = currentData.ville || '';
@@ -1015,12 +1023,13 @@
       bounds.push([selfCoords.lat, selfCoords.lng]);
     }
 
-    if(snaps.empty){ box.innerHTML = '<div class="empty">Aucun artisan trouvé dans votre ville pour l\'instant.</div>'; if(bounds.length) clientMapInstance.setView(bounds[0], 12); return; }
-    box.innerHTML = '';
-
     // Artisans mis en avant (promotion) : ils passent en tête de liste, avec une rotation
     // qui change au fil du temps si plusieurs artisans sont mis en avant en même temps.
-    const allDocs = snaps.docs.map(s => ({ id: s.id, data: s.data() }));
+    // Les comptes suspendus par l'administration ne doivent jamais apparaître ici.
+    const allDocs = snaps.docs.map(s => ({ id: s.id, data: s.data() })).filter(x => x.data.status !== 'suspended');
+    if(!allDocs.length){ box.innerHTML = '<div class="empty">Aucun artisan trouvé dans votre ville pour l\'instant.</div>'; if(bounds.length) clientMapInstance.setView(bounds[0], 12); return; }
+    box.innerHTML = '';
+
     const featuredDocs = allDocs.filter(x => x.data.featured === true);
     const normalDocs = allDocs.filter(x => x.data.featured !== true);
     if(featuredDocs.length > 1){
@@ -1052,7 +1061,7 @@
         <div class="item-top">
           ${avatarHtml(d.photo, d.prenom+' '+d.nom, 44, true)}
           <div>
-            <div class="item-title"><span class="dispo-dot ${dispo?'vert':'rouge'}"></span>${d.prenom} ${d.nom}${d.featured ? ' <span style="font-size:10px; font-weight:700; color:#9C6B00; background:#FDEFD3; padding:2px 7px; border-radius:6px; text-transform:uppercase; letter-spacing:0.03em;">Recommandé</span>' : ''}</div>
+            <div class="item-title"><span class="dispo-dot ${dispo?'vert':'rouge'}"></span>${d.prenom} ${d.nom}${d.certificationStatus === 'certifie' ? certBadgeHtml() : ''}${d.featured ? ' <span style="font-size:10px; font-weight:700; color:#9C6B00; background:#FDEFD3; padding:2px 7px; border-radius:6px; text-transform:uppercase; letter-spacing:0.03em;">Recommandé</span>' : ''}</div>
             <div class="item-sub">${(d.metiers||[]).join(', ')}</div>
             <div style="margin-top:4px;">${renderStars(avg, count)}</div>
           </div>
@@ -1083,7 +1092,7 @@
         <div class="modal">
           <button class="modal-close" id="modal-close">Fermer</button>
           <div style="display:flex; justify-content:center; margin-top:4px;">${avatarHtml(d.photo, d.prenom+' '+d.nom, 84, true)}</div>
-          <h2 style="font-size:19px; margin-top:12px; text-align:center;"><span class="dispo-dot ${dispo?'vert':'rouge'}"></span>${d.prenom} ${d.nom}</h2>
+          <h2 style="font-size:19px; margin-top:12px; text-align:center;"><span class="dispo-dot ${dispo?'vert':'rouge'}"></span>${d.prenom} ${d.nom}${d.certificationStatus === 'certifie' ? certBadgeHtml() : ''}</h2>
           <div style="margin-top:4px; text-align:center;">${renderStars(avg, count)}</div>
           <div class="item-sub" style="margin-top:6px; text-align:center;">${dispo ? 'Disponible actuellement' : 'Actuellement occupé'}</div>
           <div style="margin-top:14px;">
@@ -1222,6 +1231,106 @@
     await updateDoc(doc(db, "users", artisanId), { noteMoyenne: avg, nbAvis: count });
   }
 
+  // ---------- CERTIFICATION PROFESSIONNELLE (K-bis + assurance RC décennale) ----------
+  function renderCertificationCard(){
+    const box = document.getElementById('cert-status-box');
+    if(!box) return;
+    const statut = currentData.certificationStatus || 'aucune';
+    if(statut === 'certifie'){
+      box.innerHTML = `<div style="display:flex; align-items:center; gap:8px;">${certBadgeHtml()}<span style="font-weight:600;">Compte certifié</span></div>
+        <div class="item-sub" style="margin-top:6px;">Votre certification a été validée. Elle apparaît désormais à côté de votre nom.</div>`;
+    } else if(statut === 'en_attente'){
+      box.innerHTML = `<div class="item-sub">Votre dossier est en attente de validation par notre équipe. Vous serez informé dès qu'il aura été examiné.</div>`;
+    } else {
+      const refuse = statut === 'refuse';
+      box.innerHTML = `
+        <div class="item-sub">${refuse ? 'Votre précédente demande a été refusée. Vous pouvez soumettre un nouveau dossier.' : 'Faites certifier votre compte pour rassurer vos clients : un dossier K-bis et une attestation d\'assurance RC décennale valides vous permettent d\'obtenir une pastille de validation visible sur votre profil.'}</div>
+        <button class="secondary" id="btn-open-cert" style="margin-top:10px;">Faire certifier mon compte</button>`;
+      document.getElementById('btn-open-cert').addEventListener('click', openCertificationUpload);
+    }
+  }
+
+  let certKbisDataUrl = null, certAssuranceDataUrl = null;
+  function openCertificationUpload(){
+    certKbisDataUrl = null; certAssuranceDataUrl = null;
+    const root = document.getElementById('modal-root');
+    root.innerHTML = `
+      <div class="modal-bg" id="cert-bg">
+        <div class="modal">
+          <button class="modal-close" id="cert-close">Fermer</button>
+          <h2 style="font-size:18px; margin-top:6px;">Certification professionnelle</h2>
+          <div class="item-sub" style="margin-top:6px;">Envoyez une photo lisible de chaque document. Les deux sont obligatoires.</div>
+          <label style="margin-top:14px;">Extrait K-bis</label>
+          <input type="file" id="cert-kbis-input" accept="image/*">
+          <img id="cert-kbis-preview" class="hidden" style="width:100%; max-height:180px; object-fit:contain; border-radius:8px; margin-top:8px; background:#f5f5f5;">
+          <label style="margin-top:14px;">Attestation d'assurance RC décennale</label>
+          <input type="file" id="cert-assurance-input" accept="image/*">
+          <img id="cert-assurance-preview" class="hidden" style="width:100%; max-height:180px; object-fit:contain; border-radius:8px; margin-top:8px; background:#f5f5f5;">
+          <button class="primary" id="btn-submit-cert" style="margin-top:16px;">Envoyer mon dossier</button>
+        </div>
+      </div>`;
+    document.getElementById('cert-close').addEventListener('click', () => root.innerHTML = '');
+    document.getElementById('cert-bg').addEventListener('click', (e) => { if(e.target.id === 'cert-bg') root.innerHTML = ''; });
+
+    document.getElementById('cert-kbis-input').addEventListener('change', async () => {
+      const file = document.getElementById('cert-kbis-input').files[0];
+      if(!file) return;
+      try{
+        certKbisDataUrl = await resizeImageToDataUrl(file, 1300, 0.6);
+        const prev = document.getElementById('cert-kbis-preview');
+        prev.src = certKbisDataUrl; prev.classList.remove('hidden');
+      }catch(e){ showMsg("Impossible de charger cette image.", "error"); }
+    });
+    document.getElementById('cert-assurance-input').addEventListener('change', async () => {
+      const file = document.getElementById('cert-assurance-input').files[0];
+      if(!file) return;
+      try{
+        certAssuranceDataUrl = await resizeImageToDataUrl(file, 1300, 0.6);
+        const prev = document.getElementById('cert-assurance-preview');
+        prev.src = certAssuranceDataUrl; prev.classList.remove('hidden');
+      }catch(e){ showMsg("Impossible de charger cette image.", "error"); }
+    });
+
+    document.getElementById('btn-submit-cert').addEventListener('click', async () => {
+      if(!certKbisDataUrl || !certAssuranceDataUrl){
+        showMsg("Merci d'ajouter les deux documents avant d'envoyer.", "error");
+        return;
+      }
+      const btn = document.getElementById('btn-submit-cert');
+      btn.disabled = true; btn.textContent = "Envoi en cours...";
+      try{
+        const artisanName = (currentData.prenom||'') + ' ' + (currentData.nom||'');
+        await addDoc(collection(db, "certifications"), {
+          artisanId: currentUser.uid, artisanName, artisanEmail: currentData.email || '',
+          kbisImage: certKbisDataUrl, assuranceImage: certAssuranceDataUrl,
+          status: 'en_attente', createdAt: serverTimestamp()
+        });
+        await updateDoc(doc(db, "users", currentUser.uid), { certificationStatus: 'en_attente' });
+        currentData.certificationStatus = 'en_attente';
+        // Notification automatique à l'administrateur (réutilise le modèle EmailJS déjà configuré)
+        if(window.emailjs){
+          const lienAdmin = window.location.origin + window.location.pathname.replace('espace.html', '') + 'admin.html';
+          emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+            email_artisan: currentData.email || '',
+            metier: "NOUVELLE DEMANDE DE CERTIFICATION",
+            ville: currentData.ville || (currentData.villesIntervention||[]).join(', '),
+            description: "Un artisan a déposé un dossier de certification (K-bis + assurance RC décennale). Ouvrez la console admin, onglet Certifications, pour l'examiner.",
+            email_client: "travaux.presto.admin@gmail.com",
+            lien_client: lienAdmin,
+            name: artisanName
+          }).catch((e) => console.error("Erreur notification certification :", e));
+        }
+        showMsg("Dossier envoyé, en attente de validation. Merci !", "ok");
+        root.innerHTML = '';
+        renderCertificationCard();
+      }catch(e){
+        console.error(e);
+        btn.disabled = false; btn.textContent = "Envoyer mon dossier";
+        showMsg("Erreur lors de l'envoi : " + (e.message || e.code || "inconnue"), "error");
+      }
+    });
+  }
+
   // ---------- MUR DES ANNONCES (artisan) ----------
   async function loadAdsWall(readOnly){
     const box = document.getElementById('ads-wall');
@@ -1358,6 +1467,7 @@
       for(const s of snaps.docs){
         const artisan = s.data();
         if(!artisan.email) continue;
+        if(artisan.status === 'suspended') continue;
         if(!Array.isArray(artisan.metiers) || !artisan.metiers.includes(metier)) continue;
         emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
           email_artisan: artisan.email,
@@ -1386,6 +1496,7 @@
             <div class="contact-opt" id="opt-message"><span class="dot-ic"></span> Message</div>
             <div class="contact-opt" id="opt-call"><span class="dot-ic"></span> Appel</div>
             <div class="contact-opt diag" id="opt-video"><span class="dot-ic"></span> Appel vidéo diagnostic</div>
+            <div class="contact-opt diag" id="opt-report"><span class="dot-ic"></span> Signaler cet utilisateur</div>
           </div>
         </div>
       </div>`;
@@ -1393,6 +1504,28 @@
     document.getElementById('contact-bg').addEventListener('click', (e) => { if(e.target.id==='contact-bg') root.innerHTML=''; });
     document.getElementById('opt-message').addEventListener('click', () => {
       openComposeMessage(targetUid, targetName);
+    });
+    document.getElementById('opt-report').addEventListener('click', () => {
+      const modal = root.querySelector('.modal');
+      modal.innerHTML = `
+        <button class="modal-close" id="report-close">Fermer</button>
+        <h2 style="font-size:18px; margin-top:6px;">Signaler ${targetName}</h2>
+        <div class="item-sub" style="margin-top:6px;">Explique brièvement le problème rencontré. Notre équipe examinera ce signalement.</div>
+        <textarea id="report-text" placeholder="Décris le problème (comportement, arnaque, propos déplacés...)" style="margin-top:10px; min-height:80px;"></textarea>
+        <button class="secondary" id="btn-send-report" style="margin-top:12px;">Envoyer le signalement</button>`;
+      document.getElementById('report-close').addEventListener('click', () => root.innerHTML = '');
+      document.getElementById('btn-send-report').addEventListener('click', async () => {
+        const motif = document.getElementById('report-text').value.trim();
+        if(!motif){ showMsg("Merci de décrire le problème avant d'envoyer.", "error"); return; }
+        await addDoc(collection(db, "reports"), {
+          type: 'utilisateur',
+          reportedUid: targetUid, reportedName: targetName,
+          reporterUid: currentUser.uid, reporterName: (currentData.prenom||'') + ' ' + (currentData.nom||''),
+          motif, status: 'nouveau', createdAt: serverTimestamp()
+        });
+        showMsg("Signalement envoyé à la modération. Merci.", "ok");
+        root.innerHTML = '';
+      });
     });
     async function resolvePhoto(){
       if(targetPhoto !== undefined) return targetPhoto;
@@ -1414,6 +1547,10 @@
   }
 
   function initials(name){ return name.split(' ').map(p=>p[0]||'').join('').toUpperCase().slice(0,2); }
+
+  function certBadgeHtml(){
+    return '<span class="cert-badge" title="Artisan certifié"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>';
+  }
 
   function avatarHtml(photo, name, size, square){
     size = size || 44;
