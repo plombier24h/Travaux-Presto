@@ -325,7 +325,8 @@
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
   import {
     getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail,
-    setPersistence, browserLocalPersistence, onAuthStateChanged, GoogleAuthProvider, signInWithPopup
+    setPersistence, browserLocalPersistence, onAuthStateChanged, GoogleAuthProvider, signInWithPopup,
+    signInWithRedirect, getRedirectResult
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
   import {
     getFirestore, doc, setDoc, getDoc, serverTimestamp
@@ -388,27 +389,47 @@
     });
   });
 
+  async function afterGoogleSignIn(user){
+    const snap = await getDoc(doc(db, "users", user.uid));
+    if(snap.exists()){
+      window.location.href = "espace.html";
+      return;
+    }
+    // Nouveau compte Google : on complète le profil (ville + rôle)
+    skipNextAuthRedirect = true;
+    googleUid = user.uid;
+    const parts = (user.displayName || '').split(' ');
+    document.getElementById('g-prenom').value = parts[0] || '';
+    document.getElementById('g-nom').value = parts.slice(1).join(' ') || '';
+    showStep(stepGoogle);
+  }
+
   async function handleGoogleSignIn(){
     try{
       const cred = await signInWithPopup(auth, googleProvider);
-      const user = cred.user;
-      const snap = await getDoc(doc(db, "users", user.uid));
-      if(snap.exists()){
-        window.location.href = "espace.html";
-        return;
-      }
-      // Nouveau compte Google : on complète le profil (ville + rôle)
-      skipNextAuthRedirect = true;
-      googleUid = user.uid;
-      const parts = (user.displayName || '').split(' ');
-      document.getElementById('g-prenom').value = parts[0] || '';
-      document.getElementById('g-nom').value = parts.slice(1).join(' ') || '';
-      showStep(stepGoogle);
+      await afterGoogleSignIn(cred.user);
     }catch(err){
       if(err.code === 'auth/popup-closed-by-user') return;
+      if(err.code === 'auth/popup-blocked' || err.code === 'auth/cancelled-popup-request' || err.code === 'auth/operation-not-supported-in-this-environment'){
+        // Le navigateur bloque la fenêtre pop-up : on bascule sur une redirection classique,
+        // qui ne dépend pas des réglages de blocage de pop-up du navigateur.
+        showMsg("Ouverture de Google en cours...", "ok");
+        try{ await signInWithRedirect(auth, googleProvider); }
+        catch(err2){ showMsg("Connexion Google impossible : " + (err2.message || err2.code), "error"); }
+        return;
+      }
       showMsg("Connexion Google impossible : " + (err.message || err.code), "error");
     }
   }
+
+  // Si on revient d'une redirection Google (cas du bloqueur de pop-up), on termine la connexion ici.
+  getRedirectResult(auth).then((cred) => {
+    if(cred && cred.user) return afterGoogleSignIn(cred.user);
+  }).catch((err) => {
+    if(err && err.code && err.code !== 'auth/popup-closed-by-user'){
+      showMsg("Connexion Google impossible : " + (err.message || err.code), "error");
+    }
+  });
 
   document.getElementById('btn-google-signup').addEventListener('click', handleGoogleSignIn);
   document.getElementById('btn-google-login').addEventListener('click', handleGoogleSignIn);

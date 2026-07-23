@@ -751,6 +751,7 @@
           <div class="row-actions" style="margin-top:8px;">
             <button class="btn-sm gold" data-action="reply">Envoyer la réponse</button>
             ${!m.read ? `<button class="btn-sm" data-action="mark-read">Marquer comme lu</button>` : ''}
+            <button class="btn-sm danger" data-action="delete-msg">Supprimer</button>
           </div>
         </div>`;
       el.querySelector('[data-action="reply"]').addEventListener('click', async (e) => {
@@ -776,6 +777,12 @@
           renderMessages();
         });
       }
+      el.querySelector('[data-action="delete-msg"]').addEventListener('click', async () => {
+        if(!confirm("Supprimer ce message ?")) return;
+        await deleteDoc(doc(db, "messages", m.id));
+        allMessages = allMessages.filter(x => x.id !== m.id);
+        renderMessages();
+      });
       box.appendChild(el);
     });
   }
