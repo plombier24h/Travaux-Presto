@@ -1307,15 +1307,17 @@
         });
         await updateDoc(doc(db, "users", currentUser.uid), { certificationStatus: 'en_attente' });
         currentData.certificationStatus = 'en_attente';
-        // Notification automatique à l'administrateur (réutilise le modèle EmailJS déjà configuré)
+        // Notification automatique à l'administrateur (réutilise le modèle EmailJS déjà configuré).
+        // Le champ "email_artisan" est celui utilisé comme destinataire réel dans le modèle EmailJS :
+        // il doit donc contenir l'adresse de l'ADMIN, pas celle de l'artisan qui soumet le dossier.
         if(window.emailjs){
           const lienAdmin = window.location.origin + window.location.pathname.replace('espace.html', '') + 'admin.html';
           emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
-            email_artisan: currentData.email || '',
+            email_artisan: "travaux.presto.admin@gmail.com",
             metier: "NOUVELLE DEMANDE DE CERTIFICATION",
             ville: currentData.ville || (currentData.villesIntervention||[]).join(', '),
             description: "Un artisan a déposé un dossier de certification (K-bis + assurance RC décennale). Ouvrez la console admin, onglet Certifications, pour l'examiner.",
-            email_client: "travaux.presto.admin@gmail.com",
+            email_client: currentData.email || '',
             lien_client: lienAdmin,
             name: artisanName
           }).catch((e) => console.error("Erreur notification certification :", e));

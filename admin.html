@@ -165,6 +165,7 @@
     <button data-panel="panel-stats">Statistiques</button>
     <button data-panel="panel-featured">Mise en avant</button>
     <button data-panel="panel-certs">Certifications<span id="certs-badge" class="hidden" style="margin-left:6px; background:var(--rouge); color:#fff; border-radius:10px; font-size:11px; padding:1px 7px;"></span></button>
+    <button data-panel="panel-messages">Messages<span id="messages-badge" class="hidden" style="margin-left:6px; background:var(--rouge); color:#fff; border-radius:10px; font-size:11px; padding:1px 7px;"></span></button>
   </nav>
 
   <main>
@@ -223,6 +224,12 @@
       </div>
       <div id="certs-list"><div class="empty">Chargement...</div></div>
     </div>
+
+    <!-- MESSAGES (contact direct depuis l'application) -->
+    <div class="panel" id="panel-messages">
+      <h2>Messages reçus via "Contacter Travaux Presto"</h2>
+      <div id="messages-list"><div class="empty">Chargement...</div></div>
+    </div>
   </main>
 </div>
 
@@ -237,7 +244,7 @@
     setPersistence, browserLocalPersistence
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
   import {
-    getFirestore, collection, doc, getDocs, getDoc, deleteDoc, updateDoc, query
+    getFirestore, collection, doc, getDocs, getDoc, deleteDoc, updateDoc, query, where, addDoc, serverTimestamp
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
   const firebaseConfig = {
@@ -315,19 +322,21 @@
   let allCalls = [];
   let allCallsCount = 0;
   let allCerts = [];
+  let allMessages = [];
 
   async function initDashboard(){
     if(dashboardInited) return;
     dashboardInited = true;
     showOverlay(true);
     try{
-      await Promise.all([loadUsers(), loadAds(), loadReports(), loadCallsCount(), loadCerts()]);
+      await Promise.all([loadUsers(), loadAds(), loadReports(), loadCallsCount(), loadCerts(), loadMessages()]);
       renderUsers();
       renderAds();
       renderReports();
       renderStats();
       renderFeatured();
       renderCerts();
+      renderMessages();
     }catch(e){
       console.error("Erreur chargement admin:", e);
     }
@@ -354,6 +363,12 @@
   async function loadCerts(){
     const snap = await getDocs(collection(db, "certifications"));
     allCerts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  }
+  async function loadMessages(){
+    const q = query(collection(db, "messages"), where("toId", "==", "admin"));
+    const snap = await getDocs(q);
+    allMessages = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    allMessages.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
   }
 
   // ---------- UTILISATEURS ----------
@@ -686,6 +701,63 @@
           const u = allUsers.find(x => x.uid === c.artisanId);
           if(u) u.certificationStatus = 'refuse';
           renderCerts();
+        });
+      }
+      box.appendChild(el);
+    });
+  }
+
+  // ---------- MESSAGES (contact direct) ----------
+  function renderMessages(){
+    const box = document.getElementById('messages-list');
+    const badge = document.getElementById('messages-badge');
+    const unread = allMessages.filter(m => !m.read).length;
+    if(unread){ badge.textContent = unread; badge.classList.remove('hidden'); }
+    else { badge.classList.add('hidden'); }
+
+    if(!allMessages.length){ box.innerHTML = '<div class="empty">Aucun message reçu pour l\'instant.</div>'; return; }
+    box.innerHTML = '';
+    allMessages.forEach(m => {
+      const date = m.createdAt?.seconds ? new Date(m.createdAt.seconds * 1000).toLocaleString('fr-FR') : '';
+      const el = document.createElement('div');
+      el.className = 'list-row';
+      el.style.flexDirection = 'column';
+      el.style.alignItems = 'stretch';
+      el.innerHTML = `
+        <div class="info">
+          <div class="title">${m.fromName || 'Utilisateur'} ${!m.read ? '<span class="tag status-suspended">Nouveau</span>' : ''}</div>
+          <div class="sub">${date}</div>
+        </div>
+        <div style="margin-top:8px; font-size:14px;">${m.text || ''}</div>
+        ${m.photo ? `<img src="${m.photo}" style="max-width:220px; border-radius:8px; margin-top:8px;">` : ''}
+        <div style="margin-top:10px;">
+          <textarea data-role="reply-text" placeholder="Répondre..." style="width:100%; min-height:50px; border:1.5px solid var(--bordure); border-radius:8px; padding:8px; font-family:'Inter',sans-serif; font-size:14px;"></textarea>
+          <div class="row-actions" style="margin-top:8px;">
+            <button class="btn-sm gold" data-action="reply">Envoyer la réponse</button>
+            ${!m.read ? `<button class="btn-sm" data-action="mark-read">Marquer comme lu</button>` : ''}
+          </div>
+        </div>`;
+      el.querySelector('[data-action="reply"]').addEventListener('click', async (e) => {
+        const text = el.querySelector('[data-role="reply-text"]').value.trim();
+        if(!text || !m.fromId) return;
+        e.target.disabled = true;
+        try{
+          await addDoc(collection(db, "messages"), {
+            fromId: 'admin', toId: m.fromId,
+            fromName: "Travaux Presto", photo: null,
+            text, read: false, createdAt: serverTimestamp()
+          });
+          if(!m.read){ await updateDoc(doc(db, "messages", m.id), { read: true }); m.read = true; }
+          el.querySelector('[data-role="reply-text"]').value = '';
+          renderMessages();
+        }catch(err){ console.error(err); e.target.disabled = false; }
+      });
+      const markBtn = el.querySelector('[data-action="mark-read"]');
+      if(markBtn){
+        markBtn.addEventListener('click', async () => {
+          await updateDoc(doc(db, "messages", m.id), { read: true });
+          m.read = true;
+          renderMessages();
         });
       }
       box.appendChild(el);
