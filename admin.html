@@ -114,6 +114,12 @@
   .chart-box{ background:var(--carte); border:1px solid var(--bordure); border-radius:12px; padding:20px; }
   .checkbox-row{ display:flex; align-items:center; gap:10px; }
   .checkbox-row input[type=checkbox]{ width:auto; }
+  .roles-admin{ display:flex; gap:10px; margin-top:8px; }
+  .role-tile-admin{
+    flex:1; text-align:center; padding:14px 10px; border:2px solid var(--bordure); border-radius:10px;
+    font-weight:700; color:var(--marine); cursor:pointer; font-size:14px;
+  }
+  .role-tile-admin.selected{ border-color:var(--or); background:#FFF8E6; }
   #loading-overlay{
     position:fixed; inset:0; background:rgba(247,247,245,0.9); display:flex; align-items:center;
     justify-content:center; font-size:14px; color:var(--texte-doux); z-index:999;
@@ -166,6 +172,8 @@
     <button data-panel="panel-featured">Mise en avant</button>
     <button data-panel="panel-certs">Certifications<span id="certs-badge" class="hidden" style="margin-left:6px; background:var(--rouge); color:#fff; border-radius:10px; font-size:11px; padding:1px 7px;"></span></button>
     <button data-panel="panel-messages">Messages<span id="messages-badge" class="hidden" style="margin-left:6px; background:var(--rouge); color:#fff; border-radius:10px; font-size:11px; padding:1px 7px;"></span></button>
+    <button data-panel="panel-encheres">Enchères<span id="encheres-badge" class="hidden" style="margin-left:6px; background:var(--rouge); color:#fff; border-radius:10px; font-size:11px; padding:1px 7px;"></span></button>
+    <button data-panel="panel-profils">Profils</button>
   </nav>
 
   <main>
@@ -230,6 +238,65 @@
       <h2>Messages reçus via "Contacter Travaux Presto"</h2>
       <div id="messages-list"><div class="empty">Chargement...</div></div>
     </div>
+
+    <!-- ENCHÈRES VILLE -->
+    <div class="panel" id="panel-encheres">
+      <h2>Enchères Ville</h2>
+      <div class="sub" style="color:var(--texte-doux); font-size:13px; margin-bottom:16px;">
+        Demandes d'artisans souhaitant être mis en avant contre paiement. Valide une fois le paiement confirmé
+        (par un autre moyen). Le montant le plus élevé passe en tête des recommandations côté client, dans la ville concernée.
+      </div>
+      <div class="search-row">
+        <input type="text" id="encheres-search" placeholder="Rechercher par artisan ou ville...">
+      </div>
+      <div id="encheres-list"><div class="empty">Chargement...</div></div>
+    </div>
+
+    <!-- PROFILS (création manuelle) -->
+    <div class="panel" id="panel-profils">
+      <h2>Créer un profil</h2>
+      <div class="sub" style="color:var(--texte-doux); font-size:13px; margin-bottom:16px;">
+        Crée directement une fiche client ou artisan (sans passer par l'inscription). Ce profil apparaîtra dans
+        les listes et recherches, mais ne pourra pas se connecter tant qu'aucun compte n'est associé.
+      </div>
+      <label>Type de profil</label>
+      <div class="roles-admin" id="profil-role-tiles">
+        <div class="role-tile-admin selected" data-role="client">Client</div>
+        <div class="role-tile-admin" data-role="artisan">Artisan</div>
+      </div>
+
+      <div id="profil-fields-client">
+        <label for="profil-nom">Nom</label>
+        <input type="text" id="profil-nom" placeholder="Dupont">
+        <label for="profil-prenom">Prénom</label>
+        <input type="text" id="profil-prenom" placeholder="Jean">
+      </div>
+      <div id="profil-fields-artisan" class="hidden">
+        <label for="profil-denomination">Dénomination sociale</label>
+        <input type="text" id="profil-denomination" placeholder="Dupont Plomberie">
+        <label for="profil-metiers">Métiers (séparés par une virgule)</label>
+        <input type="text" id="profil-metiers" placeholder="Plombier, Chauffagiste">
+      </div>
+
+      <label for="profil-ville">Ville</label>
+      <input type="text" id="profil-ville" placeholder="Paris">
+      <label for="profil-telephone">Téléphone (optionnel)</label>
+      <input type="text" id="profil-telephone" placeholder="06 00 00 00 00">
+      <label for="profil-email">E-mail (optionnel)</label>
+      <input type="email" id="profil-email" placeholder="contact@exemple.com">
+      <label for="profil-photo">Photo (optionnel)</label>
+      <input type="file" id="profil-photo" accept="image/*">
+      <img id="profil-photo-preview" class="hidden" style="width:90px; height:90px; object-fit:cover; border-radius:50%; margin-top:8px; display:block;">
+
+      <button class="btn-sm gold" id="btn-create-profil" style="margin-top:16px; padding:10px 18px; font-size:14px;">Créer le profil</button>
+      <div id="profil-create-msg" class="sub" style="margin-top:10px;"></div>
+
+      <h2 style="margin-top:34px;">Profils créés depuis la console</h2>
+      <div class="search-row">
+        <input type="text" id="profils-search" placeholder="Rechercher par nom ou ville...">
+      </div>
+      <div id="profils-list"><div class="empty">Chargement...</div></div>
+    </div>
   </main>
 </div>
 
@@ -244,7 +311,7 @@
     setPersistence, browserLocalPersistence
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
   import {
-    getFirestore, collection, doc, getDocs, getDoc, deleteDoc, updateDoc, query, where, addDoc, serverTimestamp
+    getFirestore, collection, doc, getDocs, getDoc, deleteDoc, updateDoc, setDoc, query, where, addDoc, serverTimestamp
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
   const firebaseConfig = {
@@ -323,13 +390,14 @@
   let allCallsCount = 0;
   let allCerts = [];
   let allMessages = [];
+  let allEncheres = [];
 
   async function initDashboard(){
     if(dashboardInited) return;
     dashboardInited = true;
     showOverlay(true);
     try{
-      await Promise.all([loadUsers(), loadAds(), loadReports(), loadCallsCount(), loadCerts(), loadMessages()]);
+      await Promise.all([loadUsers(), loadAds(), loadReports(), loadCallsCount(), loadCerts(), loadMessages(), loadEncheres()]);
       renderUsers();
       renderAds();
       renderReports();
@@ -337,6 +405,8 @@
       renderFeatured();
       renderCerts();
       renderMessages();
+      renderEncheres();
+      renderProfils();
     }catch(e){
       console.error("Erreur chargement admin:", e);
     }
@@ -370,6 +440,12 @@
     allMessages = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     allMessages.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
   }
+  async function loadEncheres(){
+    const snap = await getDocs(collection(db, "encheres"));
+    allEncheres = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    allEncheres.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+  }
+  function resizeImageToDataUrl(file, maxDim, quality){ return new Promise((resolve, reject) => { const reader = new FileReader(); reader.onerror = reject; reader.onload = () => { const img = new Image(); img.onerror = reject; img.onload = () => { let w = img.naturalWidth, h = img.naturalHeight; if(w > maxDim || h > maxDim){ if(w >= h){ h = Math.round(h * maxDim / w); w = maxDim; } else { w = Math.round(w * maxDim / h); h = maxDim; } } const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h; canvas.getContext('2d').drawImage(img, 0, 0, w, h); resolve(canvas.toDataURL('image/jpeg', quality)); }; img.src = reader.result; }; reader.readAsDataURL(file); }); }
 
   // ---------- UTILISATEURS ----------
   function renderUsers(){
@@ -803,6 +879,223 @@
       box.appendChild(el);
     });
   }
+
+  // ---------- ENCHÈRES VILLE ----------
+  function bestEncheresByArtisan(){
+    // Pour chaque (artisan, ville), on ne garde que l'enchère validée la plus récente = montant courant.
+    const best = {};
+    allEncheres.filter(e => e.status === 'validee').forEach(e => {
+      const key = e.artisanUid + '|' + e.ville;
+      const t = e.createdAt?.seconds || 0;
+      if(!best[key] || t > best[key].t) best[key] = { ...e, t };
+    });
+    return Object.values(best);
+  }
+
+  function renderEncheres(){
+    const term = document.getElementById('encheres-search').value.trim().toLowerCase();
+    const box = document.getElementById('encheres-list');
+    const badge = document.getElementById('encheres-badge');
+    const pending = allEncheres.filter(e => e.status === 'en_attente');
+    if(pending.length){ badge.textContent = pending.length; badge.classList.remove('hidden'); }
+    else { badge.classList.add('hidden'); }
+
+    const matchesTerm = (e) => {
+      if(!term) return true;
+      return [e.artisanName, e.ville].filter(Boolean).join(' ').toLowerCase().includes(term);
+    };
+
+    let html = '';
+
+    // --- Demandes en attente de validation ---
+    const pendingFiltered = pending.filter(matchesTerm);
+    html += `<h3 style="font-size:15px; color:var(--marine); margin-bottom:10px;">Demandes en attente (${pendingFiltered.length})</h3>`;
+    html += pendingFiltered.length ? '<div id="ench-pending-box"></div>' : '<div class="empty">Aucune demande en attente.</div>';
+
+    // --- Classement actuel par ville ---
+    const current = bestEncheresByArtisan().filter(matchesTerm);
+    const byVille = {};
+    current.forEach(e => { (byVille[e.ville] = byVille[e.ville] || []).push(e); });
+    Object.values(byVille).forEach(arr => arr.sort((a,b) => (b.montant - a.montant) || (a.t - b.t)));
+
+    html += `<h3 style="font-size:15px; color:var(--marine); margin:26px 0 10px;">Classement actuel par ville</h3>`;
+    if(!Object.keys(byVille).length){
+      html += '<div class="empty">Aucune enchère active pour le moment.</div>';
+    } else {
+      html += '<div id="ench-current-box"></div>';
+    }
+
+    box.innerHTML = html;
+
+    // Rendu des demandes en attente
+    if(pendingFiltered.length){
+      const pendingBox = document.getElementById('ench-pending-box');
+      pendingFiltered.forEach(e => {
+        const el = document.createElement('div');
+        el.className = 'list-row';
+        el.innerHTML = `
+          <div class="info">
+            <div class="title">${e.artisanName || '—'} <span class="tag featured">${e.montant} € — ${e.ville}</span></div>
+          </div>
+          <div class="row-actions">
+            <button class="btn-sm gold" data-action="valider">Valider</button>
+            <button class="btn-sm danger" data-action="refuser">Refuser</button>
+          </div>`;
+        el.querySelector('[data-action="valider"]').addEventListener('click', async () => {
+          await updateDoc(doc(db, "encheres", e.id), { status: 'validee', reviewedAt: Date.now() });
+          e.status = 'validee';
+          renderEncheres();
+        });
+        el.querySelector('[data-action="refuser"]').addEventListener('click', async () => {
+          if(!confirm(`Refuser l'enchère de ${e.artisanName || 'cet artisan'} (${e.montant} € — ${e.ville}) ?`)) return;
+          await updateDoc(doc(db, "encheres", e.id), { status: 'refusee', reviewedAt: Date.now() });
+          e.status = 'refusee';
+          renderEncheres();
+        });
+        pendingBox.appendChild(el);
+      });
+    }
+
+    // Rendu du classement actuel
+    if(Object.keys(byVille).length){
+      const currentBox = document.getElementById('ench-current-box');
+      Object.keys(byVille).sort().forEach(ville => {
+        const header = document.createElement('div');
+        header.style.cssText = 'font-weight:700; color:var(--texte); margin:14px 0 6px;';
+        header.textContent = ville;
+        currentBox.appendChild(header);
+        byVille[ville].forEach((e, i) => {
+          const el = document.createElement('div');
+          el.className = 'list-row';
+          el.innerHTML = `
+            <div class="info">
+              <div class="title">${i === 0 ? '🏆 ' : ''}${e.artisanName || '—'} <span class="tag featured">${e.montant} €</span>${i === 0 ? '<span class="tag status-active">Top recommandation</span>' : ''}</div>
+            </div>
+            <div class="row-actions">
+              <button class="btn-sm warn" data-action="retirer">Retirer</button>
+              <button class="btn-sm danger" data-action="supprimer">Supprimer définitivement</button>
+            </div>`;
+          el.querySelector('[data-action="retirer"]').addEventListener('click', async () => {
+            if(!confirm(`Retirer l'enchère active de ${e.artisanName || 'cet artisan'} à ${ville} ? Il redescend dans le classement normal, mais l'historique est conservé.`)) return;
+            await updateDoc(doc(db, "encheres", e.id), { status: 'retiree', reviewedAt: Date.now() });
+            const ref = allEncheres.find(x => x.id === e.id);
+            if(ref) ref.status = 'retiree';
+            renderEncheres();
+          });
+          el.querySelector('[data-action="supprimer"]').addEventListener('click', async () => {
+            if(!confirm(`Supprimer définitivement cette enchère (${e.artisanName || 'artisan'}, ${e.montant} € — ${ville}) ? Action irréversible.`)) return;
+            await deleteDoc(doc(db, "encheres", e.id));
+            allEncheres = allEncheres.filter(x => x.id !== e.id);
+            renderEncheres();
+          });
+          currentBox.appendChild(el);
+        });
+      });
+    }
+  }
+  document.getElementById('encheres-search').addEventListener('input', renderEncheres);
+
+  // ---------- PROFILS (création manuelle) ----------
+  let profilRole = 'client';
+  let profilPhotoDataUrl = null;
+  document.querySelectorAll('#profil-role-tiles .role-tile-admin').forEach(tile => {
+    tile.addEventListener('click', () => {
+      document.querySelectorAll('#profil-role-tiles .role-tile-admin').forEach(t => t.classList.remove('selected'));
+      tile.classList.add('selected');
+      profilRole = tile.dataset.role;
+      document.getElementById('profil-fields-client').classList.toggle('hidden', profilRole !== 'client');
+      document.getElementById('profil-fields-artisan').classList.toggle('hidden', profilRole !== 'artisan');
+    });
+  });
+  document.getElementById('profil-photo').addEventListener('change', async () => {
+    const file = document.getElementById('profil-photo').files[0];
+    if(!file) return;
+    try{
+      profilPhotoDataUrl = await resizeImageToDataUrl(file, 500, 0.75);
+      const prev = document.getElementById('profil-photo-preview');
+      prev.src = profilPhotoDataUrl; prev.classList.remove('hidden');
+    }catch(e){ console.error(e); }
+  });
+
+  document.getElementById('btn-create-profil').addEventListener('click', async () => {
+    const ville = document.getElementById('profil-ville').value.trim();
+    const telephone = document.getElementById('profil-telephone').value.trim();
+    const email = document.getElementById('profil-email').value.trim();
+    const msgBox = document.getElementById('profil-create-msg');
+    if(!ville){ msgBox.textContent = "Merci d'indiquer une ville."; msgBox.style.color = 'var(--rouge)'; return; }
+
+    let extra;
+    if(profilRole === 'client'){
+      const nom = document.getElementById('profil-nom').value.trim();
+      const prenom = document.getElementById('profil-prenom').value.trim();
+      if(!nom || !prenom){ msgBox.textContent = "Merci de remplir nom et prénom."; msgBox.style.color = 'var(--rouge)'; return; }
+      extra = { nom, prenom };
+    } else {
+      const denomination = document.getElementById('profil-denomination').value.trim();
+      if(!denomination){ msgBox.textContent = "Merci d'indiquer la dénomination sociale."; msgBox.style.color = 'var(--rouge)'; return; }
+      const metiers = document.getElementById('profil-metiers').value.split(',').map(s => s.trim()).filter(Boolean);
+      extra = { denominationSociale: denomination, prenom: denomination, nom: '', metiers, villesIntervention: [ville] };
+    }
+
+    const btn = document.getElementById('btn-create-profil');
+    btn.disabled = true; btn.textContent = "Création en cours...";
+    try{
+      const newRef = doc(collection(db, "users"));
+      await setDoc(newRef, {
+        ...extra, ville, telephone: telephone || '', email: email || '',
+        photo: profilPhotoDataUrl || null,
+        role: profilRole, status: 'active',
+        disponible: profilRole === 'artisan' ? true : null,
+        createdByAdmin: true, createdAt: serverTimestamp()
+      });
+      allUsers.push({ uid: newRef.id, ...extra, ville, telephone, email, photo: profilPhotoDataUrl, role: profilRole, status: 'active', createdByAdmin: true });
+      msgBox.style.color = 'var(--vert)';
+      msgBox.textContent = "Profil créé avec succès.";
+      ['profil-nom','profil-prenom','profil-denomination','profil-metiers','profil-ville','profil-telephone','profil-email'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+      profilPhotoDataUrl = null;
+      document.getElementById('profil-photo-preview').classList.add('hidden');
+      renderUsers();
+      renderProfils();
+    }catch(e){
+      console.error(e);
+      msgBox.style.color = 'var(--rouge)';
+      msgBox.textContent = "Erreur : " + (e.message || e.code || "inconnue");
+    }
+    btn.disabled = false; btn.textContent = "Créer le profil";
+  });
+
+  function renderProfils(){
+    const term = document.getElementById('profils-search').value.trim().toLowerCase();
+    const box = document.getElementById('profils-list');
+    const profils = allUsers.filter(u => u.createdByAdmin === true).filter(u => {
+      if(!term) return true;
+      const hay = [u.nom, u.prenom, u.ville].filter(Boolean).join(' ').toLowerCase();
+      return hay.includes(term);
+    });
+    if(!profils.length){ box.innerHTML = '<div class="empty">Aucun profil créé depuis la console pour l\'instant.</div>'; return; }
+    box.innerHTML = '';
+    profils.forEach(u => {
+      const el = document.createElement('div');
+      el.className = 'list-row';
+      el.innerHTML = `
+        <div class="info">
+          <div class="title">${u.prenom||''} ${u.nom||''} <span class="tag role-${u.role}">${u.role === 'artisan' ? 'Artisan' : 'Client'}</span></div>
+          <div class="sub">${u.ville || ''}${u.telephone ? ' — ' + u.telephone : ''}</div>
+        </div>
+        <div class="row-actions">
+          <button class="btn-sm danger" data-action="delete">Supprimer</button>
+        </div>`;
+      el.querySelector('[data-action="delete"]').addEventListener('click', async () => {
+        if(!confirm(`Supprimer le profil de ${u.prenom||''} ${u.nom||''} ?`)) return;
+        await deleteDoc(doc(db, "users", u.uid));
+        allUsers = allUsers.filter(x => x.uid !== u.uid);
+        renderUsers();
+        renderProfils();
+      });
+      box.appendChild(el);
+    });
+  }
+  document.getElementById('profils-search').addEventListener('input', renderProfils);
 </script>
 </body>
 </html>

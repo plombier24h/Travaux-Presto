@@ -330,6 +330,12 @@
     <div id="cert-status-box"><div class="empty">Chargement...</div></div>
   </div>
 
+  <div class="card" id="artisan-encheres-card">
+    <h2>Enchères Ville</h2>
+    <div class="item-sub">Plus votre offre est élevée, plus vous apparaissez en haut des recommandations côté client, dans votre ville.</div>
+    <button class="secondary" id="btn-open-encheres" style="margin-top:10px;">Voir les enchères de ma ville</button>
+  </div>
+
   <div class="card" id="artisan-reviews-card">
     <h2>Mes avis</h2>
     <div id="my-reviews-list"><div class="empty">Chargement...</div></div>
@@ -490,6 +496,7 @@
       document.getElementById('a-horaires').value = currentData.horaires || '';
       if(currentData.lat) document.getElementById('a-locate-status').textContent = "Position enregistrée ✓";
       renderCertificationCard();
+      document.getElementById('btn-open-encheres').addEventListener('click', openEncheresVille);
     } else {
       document.getElementById('c-email-display').value = currentData.email || '';
       document.getElementById('c-ville').value = currentData.ville || '';
@@ -1030,14 +1037,31 @@
     if(!allDocs.length){ box.innerHTML = '<div class="empty">Aucun artisan trouvé dans votre ville pour l\'instant.</div>'; if(bounds.length) clientMapInstance.setView(bounds[0], 12); return; }
     box.innerHTML = '';
 
-    const featuredDocs = allDocs.filter(x => x.data.featured === true);
-    const normalDocs = allDocs.filter(x => x.data.featured !== true);
+    // Enchères Ville validées : déterminent le classement "Top recommandations".
+    // On ne garde que l'offre validée la plus récente par artisan (montant courant).
+    let bestByArtisan = {};
+    try{
+      const encheresSnap = await getDocs(query(collection(db, "encheres"), where("ville", "==", ville), where("status", "==", "validee")));
+      encheresSnap.docs.forEach(s => {
+        const e = s.data();
+        const t = e.createdAt && e.createdAt.seconds ? e.createdAt.seconds : 0;
+        const prev = bestByArtisan[e.artisanUid];
+        if(!prev || t > prev.t) bestByArtisan[e.artisanUid] = { montant: e.montant, t };
+      });
+    }catch(e){ console.error("Erreur chargement enchères :", e); }
+
+    allDocs.forEach(x => { const b = bestByArtisan[x.id]; if(b){ x.encherMontant = b.montant; x.encherT = b.t; } });
+
+    const encherisDocs = allDocs.filter(x => x.encherMontant != null)
+      .sort((a, b) => (b.encherMontant - a.encherMontant) || (a.encherT - b.encherT));
+    const featuredDocs = allDocs.filter(x => x.encherMontant == null && x.data.featured === true);
+    const normalDocs = allDocs.filter(x => x.encherMontant == null && x.data.featured !== true);
     if(featuredDocs.length > 1){
       const seed = Math.floor(Date.now() / (1000 * 60 * 60)); // change chaque heure
       featuredDocs.forEach((x, i) => { x.rotKey = (((x.data.featuredAt || 0) % 997) + seed * 97 + i * 31) % 997; });
       featuredDocs.sort((a, b) => a.rotKey - b.rotKey);
     }
-    const orderedDocs = [...featuredDocs, ...normalDocs];
+    const orderedDocs = [...encherisDocs, ...featuredDocs, ...normalDocs];
 
     for(const s of orderedDocs){
       const d = s.data;
@@ -1054,14 +1078,20 @@
         bounds.push([coords.lat, coords.lng]);
       }
 
+      const isTopBid = encherisDocs.length && encherisDocs[0].id === s.id;
+      const isBid = s.encherMontant != null;
+      const boostBadge = isTopBid
+        ? ' <span style="font-size:10px; font-weight:700; color:#9C6B00; background:#FDEFD3; padding:2px 7px; border-radius:6px; text-transform:uppercase; letter-spacing:0.03em;">🏆 Top recommandation</span>'
+        : (isBid || d.featured) ? ' <span style="font-size:10px; font-weight:700; color:#9C6B00; background:#FDEFD3; padding:2px 7px; border-radius:6px; text-transform:uppercase; letter-spacing:0.03em;">Recommandé</span>' : '';
+
       const el = document.createElement('div');
       el.className = 'item';
-      if(d.featured) el.style.cssText = 'border:1.5px solid var(--or); background:#FFFBF0;';
+      if(d.featured || isBid) el.style.cssText = 'border:1.5px solid var(--or); background:#FFFBF0;';
       el.innerHTML = `
         <div class="item-top">
           ${avatarHtml(d.photo, d.prenom+' '+d.nom, 44, true)}
           <div>
-            <div class="item-title"><span class="dispo-dot ${dispo?'vert':'rouge'}"></span>${d.prenom} ${d.nom}${d.certificationStatus === 'certifie' ? certBadgeHtml() : ''}${d.featured ? ' <span style="font-size:10px; font-weight:700; color:#9C6B00; background:#FDEFD3; padding:2px 7px; border-radius:6px; text-transform:uppercase; letter-spacing:0.03em;">Recommandé</span>' : ''}</div>
+            <div class="item-title"><span class="dispo-dot ${dispo?'vert':'rouge'}"></span>${d.prenom} ${d.nom}${d.certificationStatus === 'certifie' ? certBadgeHtml() : ''}${boostBadge}</div>
             <div class="item-sub">${(d.metiers||[]).join(', ')}</div>
             <div style="margin-top:4px;">${renderStars(avg, count)}</div>
           </div>
@@ -1328,6 +1358,119 @@
       }catch(e){
         console.error(e);
         btn.disabled = false; btn.textContent = "Envoyer mon dossier";
+        showMsg("Erreur lors de l'envoi : " + (e.message || e.code || "inconnue"), "error");
+      }
+    });
+  }
+
+  // ---------- ENCHÈRES VILLE (mise en avant payante) ----------
+  let encheresVilleActuelle = null;
+  async function openEncheresVille(){
+    const villes = (currentData.villesIntervention || []).filter(Boolean);
+    if(!villes.length){
+      showMsg("Complétez d'abord vos villes d'intervention dans 'Mon profil'.", "error");
+      return;
+    }
+    encheresVilleActuelle = villes[0];
+    await renderEncheresModal();
+  }
+
+  async function renderEncheresModal(){
+    const villes = (currentData.villesIntervention || []).filter(Boolean);
+    const root = document.getElementById('modal-root');
+    root.innerHTML = `
+      <div class="modal-bg" id="ench-bg">
+        <div class="modal">
+          <button class="modal-close" id="ench-close">Fermer</button>
+          <h2 style="font-size:18px; margin-top:6px;">Enchères Ville</h2>
+          ${villes.length > 1 ? `
+          <label style="margin-top:10px;">Ville</label>
+          <select id="ench-ville-select">${villes.map(v => `<option value="${v}" ${v === encheresVilleActuelle ? 'selected' : ''}>${v}</option>`).join('')}</select>` : ''}
+          <div class="item-sub" style="margin-top:12px;">Offres actuelles à <b>${encheresVilleActuelle}</b> (du plus haut au plus bas) :</div>
+          <div id="ench-list" style="margin-top:8px;"><div class="empty">Chargement...</div></div>
+          <label style="margin-top:16px;">Placer / augmenter mon offre (€)</label>
+          <input type="number" id="ench-montant-input" min="1" step="1" placeholder="Ex : 25">
+          <button class="primary" id="btn-submit-ench" style="margin-top:14px;">Envoyer mon offre</button>
+          <div id="ench-pending-note" class="item-sub" style="margin-top:10px;"></div>
+        </div>
+      </div>`;
+    document.getElementById('ench-close').addEventListener('click', () => root.innerHTML = '');
+    document.getElementById('ench-bg').addEventListener('click', (e) => { if(e.target.id === 'ench-bg') root.innerHTML = ''; });
+    if(villes.length > 1){
+      document.getElementById('ench-ville-select').addEventListener('change', (e) => {
+        encheresVilleActuelle = e.target.value;
+        renderEncheresModal();
+      });
+    }
+
+    const listBox = document.getElementById('ench-list');
+    const pendingNote = document.getElementById('ench-pending-note');
+    try{
+      const snap = await getDocs(query(collection(db, "encheres"), where("ville", "==", encheresVilleActuelle)));
+      const all = snap.docs.map(s => ({ id: s.id, ...s.data() }));
+      const validees = all.filter(e => e.status === 'validee');
+      // ne garder que l'offre la plus récente validée par artisan
+      const bestByArtisan = {};
+      validees.forEach(e => {
+        const t = e.createdAt && e.createdAt.seconds ? e.createdAt.seconds : 0;
+        const prev = bestByArtisan[e.artisanUid];
+        if(!prev || t > prev.t) bestByArtisan[e.artisanUid] = { montant: e.montant, t };
+      });
+      const montants = Object.values(bestByArtisan).map(x => x.montant).sort((a,b) => b - a);
+      if(!montants.length){
+        listBox.innerHTML = '<div class="empty">Aucune offre pour l\'instant dans cette ville. Soyez le premier !</div>';
+      } else {
+        listBox.innerHTML = montants.map((m, i) => `
+          <div class="item" style="padding:10px 14px; ${bestByArtisan[currentUser.uid] && bestByArtisan[currentUser.uid].montant === m ? 'border:1.5px solid var(--or); background:#FFFBF0;' : ''}">
+            <div class="item-top" style="align-items:center;">
+              <div class="item-title" style="margin:0;">${i === 0 ? '🏆 ' : ''}${m} €</div>
+              ${i === 0 ? '<span style="margin-left:auto; font-size:10px; font-weight:700; color:#9C6B00; background:#FDEFD3; padding:2px 7px; border-radius:6px; text-transform:uppercase;">Top recommandation</span>' : ''}
+            </div>
+          </div>`).join('');
+      }
+
+      const myPending = all.find(e => e.artisanUid === currentUser.uid && e.status === 'en_attente');
+      const myValid = bestByArtisan[currentUser.uid];
+      let note = '';
+      if(myPending) note += `Votre offre de ${myPending.montant} € est en attente de validation par l'administration. `;
+      if(myValid) note += `Votre offre active actuellement : ${myValid.montant} €.`;
+      pendingNote.textContent = note;
+    }catch(e){
+      console.error(e);
+      listBox.innerHTML = '<div class="empty">Impossible de charger les enchères.</div>';
+    }
+
+    document.getElementById('btn-submit-ench').addEventListener('click', async () => {
+      const montant = parseInt(document.getElementById('ench-montant-input').value, 10);
+      if(!montant || montant <= 0){
+        showMsg("Merci d'indiquer un montant valide.", "error");
+        return;
+      }
+      const btn = document.getElementById('btn-submit-ench');
+      btn.disabled = true; btn.textContent = "Envoi en cours...";
+      try{
+        const artisanName = currentData.denominationSociale || ((currentData.prenom||'') + ' ' + (currentData.nom||'')).trim();
+        await addDoc(collection(db, "encheres"), {
+          artisanUid: currentUser.uid, artisanName, ville: encheresVilleActuelle,
+          montant, status: 'en_attente', createdAt: serverTimestamp()
+        });
+        if(window.emailjs){
+          const lienAdmin = window.location.origin + window.location.pathname.replace('espace.html', '') + 'admin.html';
+          emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+            email_artisan: "travaux.presto.admin@gmail.com",
+            metier: "NOUVELLE ENCHÈRE VILLE",
+            ville: encheresVilleActuelle,
+            description: `Un artisan propose ${montant} € pour être mis en avant à ${encheresVilleActuelle}. Ouvrez la console admin, onglet Enchères, pour valider après réception du paiement.`,
+            email_client: currentData.email || '',
+            lien_client: lienAdmin,
+            name: artisanName
+          }).catch((e) => console.error("Erreur notification enchère :", e));
+        }
+        showMsg("Offre envoyée, en attente de validation. Merci !", "ok");
+        await renderEncheresModal();
+      }catch(e){
+        console.error(e);
+        btn.disabled = false; btn.textContent = "Envoyer mon offre";
         showMsg("Erreur lors de l'envoi : " + (e.message || e.code || "inconnue"), "error");
       }
     });
