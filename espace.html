@@ -98,6 +98,12 @@
   .modal-bg{position:fixed; inset:0; background:rgba(16,29,44,0.5); display:flex; align-items:flex-end; justify-content:center; z-index:2000;}
   .modal{background:#fff; border-radius:16px 16px 0 0; padding:22px; width:100%; max-width:480px; max-height:85vh; overflow-y:auto;}
   .modal-close{background:none; border:none; color:var(--texte-doux); font-size:14px; font-weight:600; float:right; cursor:pointer;}
+  .photo-zoom-bg{position:fixed; inset:0; background:rgba(10,16,24,0.9); display:flex; align-items:center; justify-content:center; z-index:2500; padding:24px;}
+  .photo-zoom-bg img{max-width:100%; max-height:100%; border-radius:10px; object-fit:contain; display:block;}
+  .photo-zoom-close{position:absolute; top:18px; right:18px; background:rgba(255,255,255,0.15); color:#fff; border:none; width:38px; height:38px; border-radius:50%; font-size:18px; cursor:pointer;}
+  /* champ d'enchère : saisie manuelle libre, sans flèches natives */
+  input.no-spin::-webkit-outer-spin-button, input.no-spin::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0; }
+  input.no-spin{ -moz-appearance:textfield; }
 
   .contact-options{display:flex; flex-direction:column; gap:10px; margin-top:10px;}
   .contact-opt{display:flex; align-items:center; gap:12px; border:1.5px solid var(--bordure); border-radius:10px; padding:13px 14px; cursor:pointer; font-weight:600; font-size:15px; background:#fff;}
@@ -332,8 +338,8 @@
 
   <div class="card" id="artisan-encheres-card">
     <h2>Enchères Ville</h2>
-    <div class="item-sub">Plus votre offre est élevée, plus vous apparaissez en haut des recommandations côté client, dans votre ville.</div>
-    <button class="secondary" id="btn-open-encheres" style="margin-top:10px;">Voir les enchères de ma ville</button>
+    <div class="item-sub">Un artisan propose un montant pour être mis en avant auprès des clients de sa ville : plus l'offre est élevée, plus il apparaît en haut de la liste, avec la mention "Top recommandation" pour le premier.</div>
+    <button class="secondary" id="btn-open-encheres" style="margin-top:10px;">Voir les offres de ma ville et proposer la mienne</button>
   </div>
 
   <div class="card" id="artisan-reviews-card">
@@ -915,7 +921,7 @@
           <div><div class="item-title">${d.metier}</div><div class="item-sub">${d.ville}</div></div>
           <span class="status-tag status-${d.status}">${d.status === 'ouverte' ? 'Ouverte' : 'Fermée'}</span>
         </div>
-        <div class="item-desc" data-role="desc">${d.description}</div>${d.photoAnnonce ? '<img src="' + d.photoAnnonce + '" style="width:100%; max-height:200px; object-fit:cover; border-radius:10px; margin-top:8px; display:block;">' : ''}
+        <div class="item-desc" data-role="desc">${d.description}</div>${d.photoAnnonce ? '<img data-role="ad-photo" src="' + d.photoAnnonce + '" style="width:100%; max-height:200px; object-fit:cover; border-radius:10px; margin-top:8px; display:block; cursor:zoom-in;">' : ''}
         <div class="item-actions">
           <button data-action="edit">Modifier</button>
           <button data-action="delete">Supprimer</button>
@@ -926,6 +932,8 @@
         await deleteDoc(doc(db, "ads", s.id));
         loadMyAds();
       });
+      const myAdPhotoEl = el.querySelector('[data-role="ad-photo"]');
+      if(myAdPhotoEl){ myAdPhotoEl.addEventListener('click', () => openPhotoZoom(d.photoAnnonce)); }
       box.appendChild(el);
     });
   }
@@ -1054,14 +1062,25 @@
 
     const encherisDocs = allDocs.filter(x => x.encherMontant != null)
       .sort((a, b) => (b.encherMontant - a.encherMontant) || (a.encherT - b.encherT));
-    const featuredDocs = allDocs.filter(x => x.encherMontant == null && x.data.featured === true);
-    const normalDocs = allDocs.filter(x => x.encherMontant == null && x.data.featured !== true);
-    if(featuredDocs.length > 1){
-      const seed = Math.floor(Date.now() / (1000 * 60 * 60)); // change chaque heure
-      featuredDocs.forEach((x, i) => { x.rotKey = (((x.data.featuredAt || 0) % 997) + seed * 97 + i * 31) % 997; });
-      featuredDocs.sort((a, b) => a.rotKey - b.rotKey);
+
+    // Le reste de la liste (hors enchères) respecte la position choisie manuellement par
+    // l'administration dans la console (onglet "Mise en avant"), plutôt qu'une rotation automatique.
+    const poolDocs = allDocs.filter(x => x.encherMontant == null);
+    const positioned = poolDocs.filter(x => x.data.featuredPosition != null)
+      .sort((a, b) => (a.data.featuredPosition - b.data.featuredPosition) || ((a.data.featuredAt||0) - (b.data.featuredAt||0)));
+    const unpositioned = poolDocs.filter(x => x.data.featuredPosition == null);
+    const finalPool = new Array(poolDocs.length).fill(null);
+    positioned.forEach(x => {
+      let idx = Math.max(0, x.data.featuredPosition - 1);
+      while(idx < finalPool.length && finalPool[idx] !== null) idx++;
+      if(idx >= finalPool.length) idx = finalPool.length - 1;
+      if(idx >= 0) finalPool[idx] = x;
+    });
+    let ui = 0;
+    for(let i = 0; i < finalPool.length; i++){
+      if(finalPool[i] === null) finalPool[i] = unpositioned[ui++];
     }
-    const orderedDocs = [...encherisDocs, ...featuredDocs, ...normalDocs];
+    const orderedDocs = [...encherisDocs, ...finalPool.filter(Boolean)];
 
     for(const s of orderedDocs){
       const d = s.data;
@@ -1113,6 +1132,16 @@
     else if(bounds.length > 1) clientMapInstance.fitBounds(bounds, { padding: [24,24] });
   }
 
+  // Affiche une photo en entier (sans recadrage), au-dessus de la fenêtre en cours.
+  function openPhotoZoom(url){
+    if(!url) return;
+    const el = document.createElement('div');
+    el.className = 'photo-zoom-bg';
+    el.innerHTML = `<button class="photo-zoom-close" id="pz-close">✕</button><img src="${url}" alt="">`;
+    el.addEventListener('click', (e) => { if(e.target === el || e.target.id === 'pz-close') el.remove(); });
+    document.body.appendChild(el);
+  }
+
   function openArtisanModal(d){
     const root = document.getElementById('modal-root');
     const dispo = d.disponible === true;
@@ -1121,7 +1150,7 @@
       <div class="modal-bg" id="modal-bg">
         <div class="modal">
           <button class="modal-close" id="modal-close">Fermer</button>
-          <div style="display:flex; justify-content:center; margin-top:4px;">${avatarHtml(d.photo, d.prenom+' '+d.nom, 84, true)}</div>
+          <div style="display:flex; justify-content:center; margin-top:4px;"><div id="modal-avatar-zoom" style="cursor:${d.photo ? 'zoom-in' : 'default'};">${avatarHtml(d.photo, d.prenom+' '+d.nom, 84, true)}</div></div>
           <h2 style="font-size:19px; margin-top:12px; text-align:center;"><span class="dispo-dot ${dispo?'vert':'rouge'}"></span>${d.prenom} ${d.nom}${d.certificationStatus === 'certifie' ? certBadgeHtml() : ''}</h2>
           <div style="margin-top:4px; text-align:center;">${renderStars(avg, count)}</div>
           <div class="item-sub" style="margin-top:6px; text-align:center;">${dispo ? 'Disponible actuellement' : 'Actuellement occupé'}</div>
@@ -1161,6 +1190,7 @@
     document.getElementById('modal-close').addEventListener('click', () => root.innerHTML = '');
     document.getElementById('modal-bg').addEventListener('click', (e) => { if(e.target.id === 'modal-bg') root.innerHTML = ''; });
     document.getElementById('btn-contact').addEventListener('click', () => openContactOptions(d.uid, d.prenom + ' ' + d.nom, d.email, d.photo));
+    if(d.photo){ document.getElementById('modal-avatar-zoom').addEventListener('click', () => openPhotoZoom(d.photo)); }
 
     let chosenStars = 0;
     const starEls = document.querySelectorAll('#star-picker span');
@@ -1183,6 +1213,42 @@
       root.innerHTML = '';
     });
     loadReviews(d.uid, 'browse');
+  }
+
+  // Fiche client, ouverte depuis la liste d'annonces côté artisan (au lieu d'un affichage figé en liste).
+  function openClientModal(d){
+    const root = document.getElementById('modal-root');
+    root.innerHTML = `
+      <div class="modal-bg" id="client-modal-bg">
+        <div class="modal">
+          <button class="modal-close" id="client-modal-close">Fermer</button>
+          <div style="display:flex; justify-content:center; margin-top:4px;"><div id="client-avatar-zoom" style="cursor:${d.photo ? 'zoom-in' : 'default'};">${avatarHtml(d.photo, d.prenom+' '+d.nom, 84, true)}</div></div>
+          <h2 style="font-size:19px; margin-top:12px; text-align:center;">${d.prenom} ${d.nom}</h2>
+          <div class="item-sub" style="margin-top:4px; text-align:center;">Client</div>
+          <div style="margin-top:14px;">
+            <div class="item-sub">Recherche</div>
+            <div>${d.metier || '—'}${d.description ? ' — ' + d.description : ''}</div>
+          </div>
+          <div style="margin-top:10px;">
+            <div class="item-sub">Ville</div>
+            <div>${d.ville || '—'}</div>
+          </div>
+          ${d.adresseVisible !== false && d.adresse ? `<div style="margin-top:10px;"><div class="item-sub">Adresse</div><div>${d.adresse}</div></div>` : ''}
+          <div style="margin-top:10px;">
+            <div class="item-sub">Téléphone</div>
+            <div>${d.telephoneVisible === false ? 'Numéro masqué' : (d.telephone ? `<a href="tel:${d.telephone.replace(/\s/g,'')}" style="color:var(--marine); font-weight:600; text-decoration:none;">${d.telephone}</a>` : 'Non renseigné')}</div>
+          </div>
+          ${d.emailVisible !== false && d.email ? `<div style="margin-top:10px;"><div class="item-sub">E-mail</div><div>${d.email}</div></div>` : ''}
+          ${d.photoAnnonce ? `<div style="margin-top:14px;"><div class="item-sub" style="margin-bottom:6px;">Photo de l'annonce</div><img id="client-annonce-photo" src="${d.photoAnnonce}" style="width:100%; max-height:220px; object-fit:cover; border-radius:10px; cursor:zoom-in; display:block;"></div>` : ''}
+          <button class="primary" id="btn-contact-client" style="margin-top:16px;">Contacter</button>
+        </div>
+      </div>`;
+    document.getElementById('client-modal-close').addEventListener('click', () => root.innerHTML = '');
+    document.getElementById('client-modal-bg').addEventListener('click', (e) => { if(e.target.id === 'client-modal-bg') root.innerHTML = ''; });
+    document.getElementById('btn-contact-client').addEventListener('click', () => openContactOptions(d.clientId, d.prenom + ' ' + d.nom, d.email, d.photo));
+    if(d.photo){ document.getElementById('client-avatar-zoom').addEventListener('click', () => openPhotoZoom(d.photo)); }
+    const annoncePhoto = document.getElementById('client-annonce-photo');
+    if(annoncePhoto){ annoncePhoto.addEventListener('click', () => openPhotoZoom(d.photoAnnonce)); }
   }
 
   async function loadReviews(artisanId, mode, targetId){
@@ -1383,13 +1449,15 @@
         <div class="modal">
           <button class="modal-close" id="ench-close">Fermer</button>
           <h2 style="font-size:18px; margin-top:6px;">Enchères Ville</h2>
+          <div class="item-sub">Chaque artisan peut proposer un montant pour apparaître plus haut dans la liste envoyée aux clients de sa ville. Celui qui propose le plus est affiché en premier, marqué "Top recommandation". Le montant reste valable tant que personne ne propose plus que vous.</div>
           ${villes.length > 1 ? `
           <label style="margin-top:10px;">Ville</label>
           <select id="ench-ville-select">${villes.map(v => `<option value="${v}" ${v === encheresVilleActuelle ? 'selected' : ''}>${v}</option>`).join('')}</select>` : ''}
-          <div class="item-sub" style="margin-top:12px;">Offres actuelles à <b>${encheresVilleActuelle}</b> (du plus haut au plus bas) :</div>
+          <div class="item-sub" style="margin-top:12px;">Offres actuelles à <b>${encheresVilleActuelle}</b> (du plus haut au plus bas, sans les noms) :</div>
           <div id="ench-list" style="margin-top:8px;"><div class="empty">Chargement...</div></div>
           <label style="margin-top:16px;">Placer / augmenter mon offre (€)</label>
-          <input type="number" id="ench-montant-input" min="1" step="1" placeholder="Ex : 25">
+          <input type="number" class="no-spin" inputmode="numeric" id="ench-montant-input" min="1" step="1" placeholder="Tapez le montant de votre choix, ex : 25">
+          <div class="item-sub" style="margin-top:6px;">Après envoi, Travaux Presto vous contactera pour le règlement ; votre position se met à jour dès validation.</div>
           <button class="primary" id="btn-submit-ench" style="margin-top:14px;">Envoyer mon offre</button>
           <div id="ench-pending-note" class="item-sub" style="margin-top:10px;"></div>
         </div>
@@ -1518,18 +1586,22 @@
 
       const el = document.createElement('div');
       el.className = 'item';
+      el.style.cursor = 'pointer';
       el.innerHTML = `
         <div class="item-top">
           ${avatarHtml(d.photo, d.prenom+' '+d.nom, 40)}
           <div><div class="item-title">${d.metier}</div><div class="item-sub">${d.ville} — ${d.prenom} ${d.nom}</div></div>
         </div>
-        <div class="item-desc">${d.description}</div>${d.photoAnnonce ? '<img src="' + d.photoAnnonce + '" style="width:100%; max-height:220px; object-fit:cover; border-radius:10px; margin-top:10px; display:block;">' : ''}
+        <div class="item-desc">${d.description}</div>${d.photoAnnonce ? '<img data-role="ad-photo" src="' + d.photoAnnonce + '" style="width:100%; max-height:220px; object-fit:cover; border-radius:10px; margin-top:10px; display:block; cursor:zoom-in;">' : ''}
         <div class="item-sub" style="margin-top:8px;">${d.telephoneVisible === false ? 'Numéro masqué' : (d.telephone ? `<a href="tel:${d.telephone.replace(/\s/g,'')}" style="color:var(--marine); font-weight:600; text-decoration:none;">${d.telephone}</a>` : '')}</div>
         ${d.emailVisible !== false && d.email ? `<div class="item-sub" style="margin-top:4px;">${d.email}</div>` : ''}
         ${d.adresseVisible !== false && d.adresse ? `<div class="item-sub" style="margin-top:4px;">${d.adresse}</div>` : ''}
 
         <div class="item-actions"><button data-action="contact">Contacter</button></div>`;
-      el.querySelector('[data-action="contact"]').addEventListener('click', () => openContactOptions(d.clientId, d.prenom + ' ' + d.nom, d.email, d.photo));
+      el.querySelector('[data-action="contact"]').addEventListener('click', (e) => { e.stopPropagation(); openContactOptions(d.clientId, d.prenom + ' ' + d.nom, d.email, d.photo); });
+      const adPhotoEl = el.querySelector('[data-role="ad-photo"]');
+      if(adPhotoEl){ adPhotoEl.addEventListener('click', (e) => { e.stopPropagation(); openPhotoZoom(d.photoAnnonce); }); }
+      el.addEventListener('click', () => openClientModal(d));
       box.appendChild(el);
     }
 

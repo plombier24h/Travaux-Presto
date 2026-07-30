@@ -214,8 +214,9 @@
     <div class="panel" id="panel-featured">
       <h2>Mise en avant des artisans</h2>
       <div class="sub" style="color:var(--texte-doux); font-size:13px; margin-bottom:16px;">
-        Sélectionne un ou plusieurs artisans à mettre en avant. Ils apparaîtront en haut de la liste
-        côté client dans leurs villes d'intervention, avec une rotation entre eux s'ils sont plusieurs.
+        Choisis la position exacte de chaque artisan (3e, 5e, 10e...) dans la liste envoyée aux clients de sa ville.
+        Cette position s'applique après les artisans en tête grâce aux Enchères Ville (onglet séparé, payant).
+        Choisis "Pas de position fixe" pour désactiver.
       </div>
       <div class="search-row">
         <input type="text" id="featured-search" placeholder="Rechercher un artisan par nom ou ville...">
@@ -688,23 +689,28 @@
     });
     if(!artisans.length){ box.innerHTML = '<div class="empty">Aucun artisan trouvé.</div>'; return; }
     box.innerHTML = '';
+    const positionOptions = ['<option value="">Pas de position fixe</option>']
+      .concat(Array.from({length: 30}, (_, i) => i + 1).map(n => `<option value="${n}">${n}${n===1?'re':'e'} position</option>`))
+      .join('');
     artisans.forEach(u => {
       const el = document.createElement('div');
       el.className = 'list-row';
       el.innerHTML = `
         <div class="info">
-          <div class="checkbox-row">
-            <input type="checkbox" id="feat-${u.uid}" ${u.featured ? 'checked' : ''}>
-            <label for="feat-${u.uid}" style="margin:0; font-weight:700; font-size:15px; color:var(--texte); cursor:pointer;">${u.prenom||''} ${u.nom||''}</label>
-            ${u.featured ? '<span class="tag featured">Mis en avant</span>' : ''}
+          <div class="title">${u.prenom||''} ${u.nom||''}
+            ${u.featuredPosition ? `<span class="tag featured">${u.featuredPosition}${u.featuredPosition===1?'re':'e'} position</span>` : ''}
           </div>
           <div class="sub">${(u.villesIntervention||[u.ville]).filter(Boolean).join(', ')}</div>
+          <select data-role="position-select" style="margin-top:8px; max-width:220px;">${positionOptions}</select>
         </div>`;
-      el.querySelector('input[type=checkbox]').addEventListener('change', async (e) => {
-        const checked = e.target.checked;
-        const payload = checked ? { featured: true, featuredAt: Date.now() } : { featured: false };
+      el.querySelector('[data-role="position-select"]').value = u.featuredPosition || '';
+      el.querySelector('[data-role="position-select"]').addEventListener('change', async (e) => {
+        const val = e.target.value ? parseInt(e.target.value, 10) : null;
+        const payload = val
+          ? { featured: true, featuredPosition: val, featuredAt: Date.now() }
+          : { featured: false, featuredPosition: null };
         await updateDoc(doc(db, "users", u.uid), payload);
-        u.featured = checked;
+        u.featured = !!val; u.featuredPosition = val;
         renderFeatured();
       });
       box.appendChild(el);
